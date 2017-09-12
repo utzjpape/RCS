@@ -26,9 +26,9 @@ if (inlist("${suser}","wb252129","WB252129")) {
 *Aroob
 else if (inlist("${suser}","wb504672","WB504672")) {	
 	*Local directory of your checked out copy of the code
-	local swdLocal = "C:\Users\wb504672\Box Sync\RCS\trunk"
+	local swdLocal = "C:\Users\WB504672\OneDrive - WBG\GLB-RCS"
 	*Box directory where the Data folder can be located
-	local swdBox = "C:\Users\wb504672\Box Sync\HCE 2011"
+	local swdBox = "C:\Users\WB504672\WBG\Utz Johann Pape - Sh-SDN-HDPI\NBHS_2009"
 	local swdCurl = "C:\Users\wb504672\Documents"
 }
 *Luca
@@ -50,10 +50,21 @@ global gsdTemp = "`swdLocal'/Temp"
 global gsdOutput = "`swdLocal'/Output"
 global gsdDataBox = "`swdBox'"
 
-*If you have not yet installed the directories and folders below, set local to 1
-local installfolders = 0
+**If needed, install the directories and packages used in the process 
+capture confirm file "`swdLocal'/Data/nul"
+scalar define n_data=_rc
+capture confirm file "`swdLocal'/Temp/nul"
+scalar define n_temp=_rc
+capture confirm file "`swdLocal'/Output/nul"
+scalar define n_output=_rc
+scalar define check=n_data+n_temp+n_output
+di check
 
-if (`installfolders'==1) {
+if check==0 {
+		display "No action needed"
+}
+
+else {
 	mkdir "${gsdData}"
 	mkdir "${gsdTemp}"
 	mkdir "${gsdOutput}"
