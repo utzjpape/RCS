@@ -324,24 +324,41 @@ program define RCS_assign
 		*add food assigned  module
 		quiet: merge m:1 foodid using "`lc_sdTemp'/fsim_fpartition.dta", nogen assert(match) keepusing(itemmod itemred)
 		*get total food consumption
-		quiet: bysort hhid: egen xfood_t = sum(xfood)
+		quiet: bysort hhid: egen xfcons_t = sum(xfood)
 		*get reduced food consumption
 		gen xfred = xfood if itemred
-		quiet: bysort hhid: egen xfood_r = sum(xfred)
-		drop xfred
-		*randomly assign module to households
+		quiet: bysort hhid: egen xfcons_r = sum(xfred)
+		drop xfred itemred
+		*remove consumption that is not assigned
 		quiet: replace xfood = . if (itemmod>0) & (itemmod!=hhmod)
-		*aggregate by modules; use itemmod to consider core module
-		collapse (sum) xfood (mean) xfood_t xfood_r (firstnm) weight, by(hhid hhmod itemmod)
-		keep hhid hhmod xfood xfood_t xfood_r itemmod weight
-		ren xfood* xfcons*
-		quiet: reshape wide xfcons, i(hhid hhmod weight xfcons_t xfcons_r) j(itemmod)
-		*ensure zero entries are not missing
-		forvalues jmod = 1/`M' {
-			quiet: replace xfcons`jmod' = 0 if (xfcons`jmod'>=.) & (hhmod==`jmod')
-			quiet: replace xfcons`jmod' = . if (hhmod!=`jmod')
+		*add binary yes/no indicator whether food is consumed (for assigned modules)
+		quiet: gen bfitem = xfood>0 if !missing(xfood)
+		*create module consumption
+		forvalues kmod = 0/`M' {
+			quiet: bysort hhid itemmod: egen cxfood`kmod' = total(xfood) if (itemmod==`kmod') & ((`kmod'==0) | (hhmod==`kmod'))
+			quiet: bysort hhid: egen xfcons`kmod' = max(cxfood`kmod')
+			drop cxfood`kmod'
 		}
+		ren xfood xfitem
+		drop itemmod
+		quiet: reshape wide xfitem bfitem, i(hhid hhmod weight xfcons*) j(foodid)
+		keep hhid hhmod weight xfcons* xfitem* bfitem* 
+		order hhid hhmod weight xfcons* xfitem* bfitem*
+		*ensure assigned modules are not missing and non-assigned are missing
+		forvalues jmod = 1/`M' {
+			assert !missing(xfcons`jmod') if (hhmod==`jmod')
+			assert missing(xfcons`jmod') if (hhmod!=`jmod')
+		}
+		*check whether administered consumption is equal to module consumption
+		egen xt_items = rowtotal(xfitem*)
+		egen xt_mods = rowtotal(xfcons?)
+		assert round(xt_items-xt_mods,2)==0
+		drop xt_*
 		save "`lc_sdTemp'/hh-food-consumption.dta", replace
+
+		
+		*CONTINUE FROM HERE!
+		
 		*NON-FOOD CONSUMPTION
 		use "`lc_sdTemp'/HH-NonFood.dta", clear
 		*get household assigned module
