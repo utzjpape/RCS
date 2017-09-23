@@ -1,9 +1,9 @@
 *functions for RCS
 * RCS_run: runs the whole suite of programs
 *
-* RCS_partition: sub-program to partition items into modules
+* RCS_partition: sub-program called in RCS_prepare to partition items into modules
 *
-* RCS_prepare: prepares the dataset; runs the partition
+* RCS_prepare: must be run first; prepares the dataset; runs RCS_partition
 * RCS_assign: assigns households to their modules for each simulation
 * RCS_simulate: simulates RCS
 * RCS_collate: collates results from the simulation
@@ -67,7 +67,7 @@ program define RCS_partition
 	local pc = "_pc"
 	*preserve dataset
 	preserve
-	*obtain share of household consumption
+	*obtain share of household consumption (either democratic or plutocratic)
 	gen wx = `xvalue' * `fweight'
 	if ("`egalshare'"!="") {
 		bysort `hhid': egen shhx = total(`xvalue')
@@ -233,9 +233,9 @@ program define RCS_prepare
 	*prepare output directories
 	capture: mkdir "`dirbase'"
 	local lc_sdTemp = "`dirbase'/Temp"
-	capture: mkdir "`dirbase'"
+	capture: mkdir "`lc_sdTemp'"
 	local lc_sdOut = "`dirbase'/Out"
-	capture: mkdir "`dirbase'"
+	capture: mkdir "`lc_sdOut'"
 	
 	*create food and non-food files
 	use "`using'", clear
@@ -271,20 +271,18 @@ program define RCS_prepare
 	quiet: RCS_partition xfood, hhid("hhid") itemid("foodid") fweight("weight") hhsize("hhsize") nmodules(`nmodules') ncore(`ncoref') ndiff(`ndiff') `egalshare'
 	gen itemcode = foodid
 	order itemcode, before(foodid)
-	save "`lc_sdTemp'/fsim_fpartition.dta", replace
 	export excel using "`lc_sdOut'/FoodConsumption.xls", replace first(var) sheet("Items")
-	collapse (sum) hhshare totshare, by(itemmod)
-	export excel using "`lc_sdOut'/FoodConsumption.xls", sheetreplace first(var) sheet("Module Share")
+	keep foodid itemmod itemred
+	save "`lc_sdTemp'/fsim_fpartition.dta", replace
 	*non-food partition
 	use "`lc_sdTemp'/HH-NonFood.dta", clear
 	quiet: RCS_partition xnonfood, hhid("hhid") itemid("nonfoodid") fweight("weight") hhsize("hhsize") nmodules(`nmodules') ncore(`ncorenf') ndiff(`ndiff') `egalshare'
 	gen itemcode = nonfoodid
 	order itemcode, before(nonfoodid)
 	*save assignment
-	save "`lc_sdTemp'/fsim_nfpartition.dta", replace
 	export excel using "`lc_sdOut'/NonFoodConsumption.xls", replace first(var) sheet("Items")
-	collapse (sum) hhshare totshare, by(itemmod)
-	export excel using "`lc_sdOut'/NonFoodConsumption.xls", sheetreplace first(var) sheet("Module Share")
+	keep nonfoodid itemmod itemred
+	save "`lc_sdTemp'/fsim_nfpartition.dta", replace
 end
 
 capture: program drop RCS_assign
@@ -301,20 +299,15 @@ program define RCS_assign
 		*get household assignment to modules
 		use "`using'", clear
 		keep hhid cluster weight 
-		*all EAs have 9 households, make sure that 9th household gets not same module for all EAs
+		*start module assignment randomly per cluster to make sure they are uniformly across clusters
 		gen r = runiform()
 		sort cluster r
 		*get random start value for sequence for each cluster
 		by cluster: egen i = seq()
-		quiet: gen module = 1+int((4-1+1)*runiform()) if i==1
-		quiet: bysort cluster: replace module = mod(module[_n-1],4)+1 if i>1
+		quiet: gen module = 1+int((`M')*runiform()) if i==1
+		quiet: bysort cluster: replace module = mod(module[_n-1],`M')+1 if i>1
 		label var module "Optional food module assigned to household"
-		*get non-food module
-	*	gen add = cluster
-	*	replace add = cluster - 400+55 if cluster>=400
-	*	replace add = mod(add,4)
-	*	gen module_nf = mod(module+add-1,4) + 1 
-	*	recode module_nf (3=4) (4=3) (1=2) (2=1) if cluster > 50
+		*get non-food module (same as food module by definition)
 		quiet: gen module_nf = module
 		keep hhid module module_nf
 		ren module hhmod_f 
