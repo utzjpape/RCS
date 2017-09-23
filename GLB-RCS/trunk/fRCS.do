@@ -9,8 +9,6 @@
 * RCS_collate: collates results from the simulation
 * RCS_analyze: analyzes the results
 
-*Note: Outliers are replaced only for prediction. Line1189 in RCS_simulation
-
 
 *calculate standard error
 capture: program drop fse
@@ -326,8 +324,6 @@ program define RCS_assign
 
 		*prepare dataset for MI 
 		*FOOD CONSUMPTION
-*		local lc_sdTemp "C:\Users\wb252129\Box Sync\RapidCons\RCS\trunk\Output\SOM\d3m4\Temp"
-*		local M=4
 		use "`lc_sdTemp'/HH-Food.dta", clear
 		*get household assigned module
 		quiet: merge m:1 hhid using "`lc_sdTemp'/HH-ModuleAssignment.dta", nogen assert(match) keepusing(hhmod_f)
@@ -335,23 +331,18 @@ program define RCS_assign
 		*add food assigned  module
 		quiet: merge m:1 foodid using "`lc_sdTemp'/fsim_fpartition.dta", nogen assert(match) keepusing(itemmod itemred)
 		*get total food consumption
-		bysort hhid: egen  xfood_t = sum(xfood) // The total of the original
+		quiet: bysort hhid: egen xfood_t = sum(xfood)
 		*get reduced food consumption
-		gen  xfred = xfood if itemred
-		quiet: bysort hhid: egen  xfood_r = sum(xfred) // The total of the reduced
+		gen xfred = xfood if itemred
+		quiet: bysort hhid: egen xfood_r = sum(xfred)
 		drop xfred
-		quiet: clonevar cfood=xfood // Keep the original value as c*
 		*randomly assign module to households
 		quiet: replace xfood = . if (itemmod>0) & (itemmod!=hhmod)
-		quiet: bysort hhid: egen  xfood_t2 = sum(xfood) // The total of the moduled
-		save "`lc_sdTemp'/food-consumption.dta", replace // ST added
 		*aggregate by modules; use itemmod to consider core module
-		collapse (sum) xfood cfood (mean) xfood_t xfood_t2 xfood_r (firstnm) weight, by(hhid hhmod itemmod)
-		keep hhid hhmod xfood xfood_t xfood_r itemmod weight cfood xfood_t2 
+		collapse (sum) xfood (mean) xfood_t xfood_r (firstnm) weight, by(hhid hhmod itemmod)
+		keep hhid hhmod xfood xfood_t xfood_r itemmod weight
 		ren xfood* xfcons*
-		ren cfood* cfcons*
-		quiet: reshape wide xfcons cfcons, i(hhid hhmod weight xfcons_t xfcons_t2 xfcons_r) j(itemmod)
-*		quiet: reshape wide xfcons oxfcons, i(hhid) j(itemmod)
+		quiet: reshape wide xfcons, i(hhid hhmod weight xfcons_t xfcons_r) j(itemmod)
 		*ensure zero entries are not missing
 		forvalues jmod = 1/`M' {
 			quiet: replace xfcons`jmod' = 0 if (xfcons`jmod'>=.) & (hhmod==`jmod')
@@ -366,30 +357,25 @@ program define RCS_assign
 		*add food assigned  module
 		quiet: merge m:1 nonfoodid using "`lc_sdTemp'/fsim_nfpartition.dta", nogen keep(match) keepusing(itemmod itemred)
 		*get total food consumption
-		quiet: bysort hhid: egen   xnonfood_t = sum(xnonfood) // The total of the original
+		quiet: bysort hhid: egen xnonfood_t = sum(xnonfood)
 		*get reduced food consumption
-		gen   xnonfred = xnonfood if itemred
-		quiet: bysort hhid: egen  xnonfood_r = sum(xnonfred)  // The total of the reduced
+		gen xnonfred = xnonfood if itemred
+		quiet: bysort hhid: egen xnonfood_r = sum(xnonfred)
 		drop xnonfred
-		quiet: clonevar cnonfood=xnonfood // Keep the original value
 		*randomly assign module to households
 		quiet: replace xnonfood = . if (itemmod>0) & (itemmod!=hhmod)
-		quiet: bysort hhid: egen xnonfood_t2 = sum(xnonfood) // The total of the moduled
-		save "`lc_sdTemp'/nonfood-consumption.dta", replace // ST added
 		*aggregate by modules; use itemmod to consider core module
-		collapse (sum) xnonfood cnonfood (mean) xnonfood_t xnonfood_t2 xnonfood_r, by(hhid hhmod itemmod)
-		keep hhid xnonfood xnonfood_t xnonfood_r hhmod itemmod xnonfood cnonfood xnonfood_t2
+		collapse (sum) xnonfood (mean) xnonfood_t xnonfood_r, by(hhid hhmod itemmod)
+		keep hhid xnonfood xnonfood_t xnonfood_r hhmod itemmod 
 		ren xnonfood* xnfcons*
-		ren cnonfood* cnfcons*
-		quiet: reshape wide xnfcons cnfcons, i(hhid hhmod xnfcons_t xnfcons_t2 xnfcons_r) j(itemmod)
+		quiet: reshape wide xnfcons, i(hhid hhmod xnfcons_t xnfcons_r) j(itemmod)
 		*ensure zero entries are not missing
 		forvalues jmod = 1/`M' {
 			quiet: replace xnfcons`jmod' = 0 if (xnfcons`jmod'>=.) & (hhmod==`jmod')
 			quiet: replace xnfcons`jmod' = . if (hhmod!=`jmod')
 		}
 		save "`lc_sdTemp'/hh-nonfood-consumption.dta", replace
-		
-		*merge datasets (For hh level data)
+		*merge datasets
 		use "`using'", clear
 		drop xfood* xnonfood*
 		quiet: merge 1:1 hhid using "`lc_sdTemp'/hh-food-consumption.dta", nogen assert(master match)
@@ -399,10 +385,8 @@ program define RCS_assign
 		quiet: drop if xfcons0>=.
 		capture: quiet: drop if hhcook_1>=.
 		*get per capita variables
-		ren xfcons_t2 mfcons // moduled sum (m* in the final data)
-		ren xnfcons_t2 mnfcons // moduled sum (m* in the final data)
-		ren (x*cons_t x*cons_r) (c*cons r*cons) // (original and reduced) (to c* r* in the end)
-		foreach v of varlist xfcons* xnfcons* cfcons* cnfcons* rfcons rnfcons mfcons mnfcons {
+		ren (x*cons_t x*cons_r) (c*cons r*cons)
+		foreach v of varlist xfcons* xnfcons* cfcons cnfcons rfcons rnfcons {
 			quiet: gen `v'_pc = `v'/hhsize
 		} 
 		*create percentiles
@@ -411,60 +395,15 @@ program define RCS_assign
 		}
 
 		*prepare check variables
-		quiet: gen ccons_pc = cfcons_pc + cnfcons_pc + xdurables_pc  // original (complete), ccons_pc=fcons_pc 
-		quiet: gen rcons_pc = rfcons_pc + rnfcons_pc + xdurables_pc // reduced
-		quiet: gen mcons_pc = mfcons_pc + mnfcons_pc + xdurables_pc // moduled
-		
-		forvalue d=0/4{
-		label var xfcons`d'_pc "PC RCS food cons. in module `d'"
-		label var cfcons`d'_pc "PC original food cons. in module `d'"
-		label var xnfcons`d'_pc "PC RCS non-food cons. in module `d'"
-		label var cnfcons`d'_pc "PC original non-food cons. in module `d'"
-		}
-		label var rfcons_pc "PC reduced food cons."
-		label var rnfcons_pc "PC reduced non-food cons."
-		
-		label var mfcons_pc "RCS PC food nominal cons"
-		label var mnfcons_pc "RCS PC non-food nominal cons"
-		label var cfcons_pc "Original nominal PC food cons" 
-		label var cnfcons_pc "Original nominal PC non-food cons"
-		label var ccons_pc "Original nominal PC cons"
-		label var rcons_pc "Reduced nominal PC cons" 
-		label var mcons_pc "RCS nominal PC cons"
-		
+		quiet: gen ccons_pc = cfcons_pc + cnfcons_pc + xdurables_pc
+		quiet: gen rcons_pc = rfcons_pc + rnfcons_pc + xdurables_pc
 		save "`lc_sdTemp'/mi_`isim'.dta", replace
-		
-		*Prepare item level database to get item shares
-		use "`lc_sdTemp'/food-consumption.dta",clear
-		rename foodid itemid
-		rename xfood cons_value
-		label var cons_value "RCS Expenditure (1,000 shillings/household/month)"
-		rename cfood fcons_value
-		label var fcons_value "Original Expenditure (1,000 shillings/household/month)"
-		rename hhmod mod_hh 
-		rename itemmod  mod_item
-		drop xfood_t xfood_r xfood_t2 itemred
-		save "`lc_sdTemp'/food-consumption_mi_`isim'.dta",replace
-		
-		use "`lc_sdTemp'/nonfood-consumption.dta",clear
-		rename nonfoodid itemid
-		rename xnonfood cons_value
-		label var cons_value "RCS Expenditure (1,000 shillings/household/month)"
-		rename cnonfood fcons_value
-		label var fcons_value "Original Expenditure (1,000 shillings/household/month)"
-		rename hhmod mod_hh 
-		rename itemmod  mod_item
-		drop xnonfood_t xnonfood_r xnonfood_t2 itemred
-		save "`lc_sdTemp'/nonfood-consumption_mi_`isim'.dta",replace
-		
-		}
+	}
 end
-
-
 
 capture: program drop RCS_simulate
 program define RCS_simulate
-	syntax using/, dirbase(string) nmodules(integer) nsim(integer) nmi(integer) lmethod(namelist) model(string) model2(string) model3(string) rseed(integer)
+	syntax using/, dirbase(string) nmodules(integer) nsim(integer) nmi(integer) lmethod(namelist) model(string) rseed(integer)
 	*prepare output directories
 	local lc_sdTemp = "`dirbase'/Temp"
 	local lc_sdOut = "`dirbase'/Out"
@@ -492,7 +431,8 @@ program define RCS_simulate
 				summ `v',d
 				replace `v'= `r(p99)' if (`v'>`r(p99)') & (`v'<.)
 				*log transform
-				generate double ln`v' = round(log(`v'+0.1),.00000000001)
+				gen ln`v' = log(`v')
+				replace ln`v' = log(.1) if `v'==0
 			}
 			*method selection
 			local mipre = ""
@@ -515,547 +455,64 @@ program define RCS_simulate
 				drop avg_x*
 			}
 			else if ("`smethod'"=="tobit") {
-				forvalues imod = 1/`M' {
+				quiet: forvalues imod = 1/`M' {
 					*food
-	*				tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0) log // With cluster-level dummies
-					tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model'           [aweight=weight], ll(0) log // No cluster-level dummies
-					mata: cond(st_matrix("e(V)"))
+	*				reg lnxfcons`imod'_pc xfcons0_pc lnxfcons0_pc hhsize pchild i.cluster
+					tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0)
 					predict y`imod'_pc if xfcons`imod'_pc>=.
 	*				replace xfcons`imod'_pc = exp(y`imod'_pc) if xfcons`imod'_pc>=.
 					replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
 					drop y`imod'_pc
 					*non-food
-    *				tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0) log // With cluster-level dummies 
-					tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model'          [aweight=weight], ll(0) log // No cluster-level dummies
-					mata: cond(st_matrix("e(V)"))
+	*				reg lnxnfcons`imod'_pc xnfcons0_pc lnxnfcons0_pc hhsize pchild i.cluster
+					tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0)
 					predict y`imod'_pc if xnfcons`imod'_pc>=.
 	*				replace xnfcons`imod'_pc = exp(y`imod'_pc) if xnfcons`imod'_pc>=.
 					replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
 					drop y`imod'_pc
 				}
 			}
-
-			else if ("`smethod'"=="tobit2") {
-				forvalues imod = 1/`M' {
-					*food
-	*				tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0) log // With cluster-level dummies
-					tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model2'           [aweight=weight], ll(0) log // No cluster-level dummies
-					mata: cond(st_matrix("e(V)"))
-					predict y`imod'_pc if xfcons`imod'_pc>=.
-	*				replace xfcons`imod'_pc = exp(y`imod'_pc) if xfcons`imod'_pc>=.
-					replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
-					drop y`imod'_pc
-					*non-food
-    *				tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0) log // With cluster-level dummies 
-					tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model2'          [aweight=weight], ll(0) log // No cluster-level dummies
-					mata: cond(st_matrix("e(V)"))
-					predict y`imod'_pc if xnfcons`imod'_pc>=.
-	*				replace xnfcons`imod'_pc = exp(y`imod'_pc) if xnfcons`imod'_pc>=.
-					replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
-					drop y`imod'_pc
-				}
-			}
-			
-			else if ("`smethod'"=="tobit3") {
-				forvalues imod = 1/`M' {
-					*food
-	*				tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0) log // With cluster-level dummies
-					tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model3'           [aweight=weight], ll(0) log // No cluster-level dummies
-					mata: cond(st_matrix("e(V)"))
-					predict y`imod'_pc if xfcons`imod'_pc>=.
-	*				replace xfcons`imod'_pc = exp(y`imod'_pc) if xfcons`imod'_pc>=.
-					replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
-					drop y`imod'_pc
-					*non-food
-    *				tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0) log // With cluster-level dummies 
-					tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model3'          [aweight=weight], ll(0) log // No cluster-level dummies
-					mata: cond(st_matrix("e(V)"))
-					predict y`imod'_pc if xnfcons`imod'_pc>=.
-	*				replace xnfcons`imod'_pc = exp(y`imod'_pc) if xnfcons`imod'_pc>=.
-					replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
-					drop y`imod'_pc
-				}
-			}
-			
-			
 			else if ("`smethod'"=="reg") {
-				forvalues imod = 1/`M' {
+				quiet: forvalues imod = 1/`M' {
 					*food
-    *				reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight] // With cluster-level dummies
-					reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model'           [aweight=weight] // No cluster-level dummies
+	*				reg lnxfcons`imod'_pc xfcons0_pc lnxfcons0_pc hhsize pchild i.cluster
+					reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight]
 					predict y`imod'_pc if xfcons`imod'_pc>=.
 	*				replace xfcons`imod'_pc = exp(y`imod'_pc) if xfcons`imod'_pc>=.
 					replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
 					drop y`imod'_pc
 					*non-food
-	*				reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight] // With cluster-level dummies
-					reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model'           [aweight=weight] // No cluster-level dummies
+	*				reg lnxnfcons`imod'_pc xnfcons0_pc lnxnfcons0_pc hhsize pchild i.cluster
+					reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight]
 					predict y`imod'_pc if xnfcons`imod'_pc>=.
 	*				replace xnfcons`imod'_pc = exp(y`imod'_pc) if xnfcons`imod'_pc>=.
 					replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
 					drop y`imod'_pc
 				}
 			}
-			
-			else if ("`smethod'"=="reg2") {
-				forvalues imod = 1/`M' {
-					*food
-    *				reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight] // With cluster-level dummies
-					reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model2'           [aweight=weight] // No cluster-level dummies
-					predict y`imod'_pc if xfcons`imod'_pc>=.
-	*				replace xfcons`imod'_pc = exp(y`imod'_pc) if xfcons`imod'_pc>=.
-					replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
-					drop y`imod'_pc
-					*non-food
-	*				reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight] // With cluster-level dummies
-					reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model2'           [aweight=weight] // No cluster-level dummies
-					predict y`imod'_pc if xnfcons`imod'_pc>=.
-	*				replace xnfcons`imod'_pc = exp(y`imod'_pc) if xnfcons`imod'_pc>=.
-					replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
-					drop y`imod'_pc
-				}
-			}
-			
-			else if ("`smethod'"=="reg3") {
-				forvalues imod = 1/`M' {
-					*food
-    *				reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight] // With cluster-level dummies
-					reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model3'           [aweight=weight] // No cluster-level dummies
-					predict y`imod'_pc if xfcons`imod'_pc>=.
-	*				replace xfcons`imod'_pc = exp(y`imod'_pc) if xfcons`imod'_pc>=.
-					replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
-					drop y`imod'_pc
-					*non-food
-	*				reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight] // With cluster-level dummies
-					reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model3'           [aweight=weight] // No cluster-level dummies
-					predict y`imod'_pc if xnfcons`imod'_pc>=.
-	*				replace xnfcons`imod'_pc = exp(y`imod'_pc) if xnfcons`imod'_pc>=.
-					replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
-					drop y`imod'_pc
-				}
-			}
-			
-			
-
-			
-			else if ("`smethod'"=="twopart") {
-				forvalues imod = 1/`M' {
-					*food
-					gen     dxfcons`imod'_pc=1 if xfcons`imod'_pc>0 & xfcons`imod'_pc!=.
-					replace dxfcons`imod'_pc=0 if xfcons`imod'_p==0 & xfcons`imod'_pc!=.
-					probit  dxfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model'           [pweight=weight] // part I specification
-					predict p`imod'_pc if xfcons`imod'_pc==.
-					regress xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' [pweight=weight] if dxfcons`imod'_pc==1 // part II specification
-					predict y`imod'_pc if xfcons`imod'_pc==.
-					replace xfcons`imod'_pc = max(y`imod'_pc*p`imod'_pc,0) if xfcons`imod'_pc==.
-					drop y`imod'_pc p`imod'_pc
-					*non-food
-					gen     dxnfcons`imod'_pc=1 if xnfcons`imod'_pc>0 & xnfcons`imod'_pc!=.
-					replace dxnfcons`imod'_pc=0 if xnfcons`imod'_p==0 & xnfcons`imod'_pc!=.
-					probit  dxnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model'           [pweight=weight] // part I specification
-					predict p`imod'_pc if xnfcons`imod'_pc==.
-					regress xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' [pweight=weight] if dxnfcons`imod'_pc==1 // part II specification
-					predict y`imod'_pc if xnfcons`imod'_pc==.
-					replace xnfcons`imod'_pc = max(y`imod'_pc*p`imod'_pc,0) if xnfcons`imod'_pc==.
-					drop y`imod'_pc  p`imod'_pc
-				}
-			}
-			
-
-			else if ("`smethod'"=="twopart2") {
-				forvalues imod = 1/`M' {
-					*food
-					gen     dxfcons`imod'_pc=1 if xfcons`imod'_pc>0 & xfcons`imod'_pc!=.
-					replace dxfcons`imod'_pc=0 if xfcons`imod'_p==0 & xfcons`imod'_pc!=.
-					probit  dxfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model2'           [pweight=weight] // part I specification
-					predict p`imod'_pc if xfcons`imod'_pc==.
-					regress xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model2' [pweight=weight] if dxfcons`imod'_pc==1 // part II specification
-					predict y`imod'_pc if xfcons`imod'_pc==.
-					replace xfcons`imod'_pc = max(y`imod'_pc*p`imod'_pc,0) if xfcons`imod'_pc==.
-					drop y`imod'_pc p`imod'_pc
-					*non-food
-					gen     dxnfcons`imod'_pc=1 if xnfcons`imod'_pc>0 & xnfcons`imod'_pc!=.
-					replace dxnfcons`imod'_pc=0 if xnfcons`imod'_p==0 & xnfcons`imod'_pc!=.
-					probit  dxnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model2'           [pweight=weight] // part I specification
-					predict p`imod'_pc if xnfcons`imod'_pc==.
-					regress xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model2' [pweight=weight] if dxnfcons`imod'_pc==1 // part II specification
-					predict y`imod'_pc if xnfcons`imod'_pc==.
-					replace xnfcons`imod'_pc = max(y`imod'_pc*p`imod'_pc,0) if xnfcons`imod'_pc==.
-					drop y`imod'_pc  p`imod'_pc
-				}
-			}
-			
-			
-			else if ("`smethod'"=="twopart3") {
-				forvalues imod = 1/`M' {
-					*food
-					gen     dxfcons`imod'_pc=1 if xfcons`imod'_pc>0 & xfcons`imod'_pc!=.
-					replace dxfcons`imod'_pc=0 if xfcons`imod'_p==0 & xfcons`imod'_pc!=.
-					probit  dxfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model3'           [pweight=weight] // part I specification
-					predict p`imod'_pc if xfcons`imod'_pc==.
-					regress xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model3' [pweight=weight] if dxfcons`imod'_pc==1 // part II specification
-					predict y`imod'_pc if xfcons`imod'_pc==.
-					replace xfcons`imod'_pc = max(y`imod'_pc*p`imod'_pc,0) if xfcons`imod'_pc==.
-					drop y`imod'_pc p`imod'_pc
-					*non-food
-					gen     dxnfcons`imod'_pc=1 if xnfcons`imod'_pc>0 & xnfcons`imod'_pc!=.
-					replace dxnfcons`imod'_pc=0 if xnfcons`imod'_p==0 & xnfcons`imod'_pc!=.
-					probit  dxnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model3'           [pweight=weight] // part I specification
-					predict p`imod'_pc if xnfcons`imod'_pc==.
-					regress xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model3' [pweight=weight] if dxnfcons`imod'_pc==1 // part II specification
-					predict y`imod'_pc if xnfcons`imod'_pc==.
-					replace xnfcons`imod'_pc = max(y`imod'_pc*p`imod'_pc,0) if xnfcons`imod'_pc==.
-					drop y`imod'_pc  p`imod'_pc
-				}
-			}
-			
-			
-
-			else if ("`smethod'"=="twopartII") {
-				forvalues imod = 1/`M' {
-					*food
-					gen     dxfcons`imod'_pc=1 if xfcons`imod'_pc>0 & xfcons`imod'_pc!=.
-					replace dxfcons`imod'_pc=0 if xfcons`imod'_p==0 & xfcons`imod'_pc!=.
-					probit  dxfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model'           [pweight=weight] // part I specification
-					predict p`imod'_pc if xfcons`imod'_pc==.
-					replace     dxfcons`imod'_pc=1 if p`imod'_pc>=0.5 & xfcons`imod'_pc==.
-					replace     dxfcons`imod'_pc=0 if p`imod'_pc< 0.5 & xfcons`imod'_pc==.
-					
-					regress xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' [pweight=weight] if dxfcons`imod'_pc==1 // part II specification
-					predict y`imod'_pc if xfcons`imod'_pc==.
-					replace xfcons`imod'_pc = max(y`imod'_pc*dxfcons`imod'_pc,0) if xfcons`imod'_pc==.
-					drop y`imod'_pc p`imod'_pc
-					
-					*non-food
-					gen     dxnfcons`imod'_pc=1 if xnfcons`imod'_pc>0 & xnfcons`imod'_pc!=.
-					replace dxnfcons`imod'_pc=0 if xnfcons`imod'_p==0 & xnfcons`imod'_pc!=.
-					probit  dxnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model'           [pweight=weight] // part I specification
-					predict p`imod'_pc if xnfcons`imod'_pc==.
-					replace     dxnfcons`imod'_pc=1 if p`imod'_pc>=0.5 & xnfcons`imod'_pc==.
-					replace     dxnfcons`imod'_pc=0 if p`imod'_pc< 0.5 & xnfcons`imod'_pc==.
-					
-					regress xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' [pweight=weight] if dxnfcons`imod'_pc==1 // part II specification
-					predict y`imod'_pc if xnfcons`imod'_pc==.
-					replace xnfcons`imod'_pc = max(y`imod'_pc*dxnfcons`imod'_pc,0) if xnfcons`imod'_pc==.
-					drop y`imod'_pc  p`imod'_pc
-				}
-			}
-
-			
-			
-			else if inlist("`smethod'","MImvn","MICE") {
+			else {
 				local mipre = "mi passive: "
 				*run MI
 				mi set wide
 				mi register imputed xfcons1_pc xnfcons1_pc xfcons2_pc xnfcons2_pc xfcons3_pc xnfcons3_pc xfcons4_pc xnfcons4_pc
 				mi register regular oxfcons0_pc oxnfcons0_pc oxfcons1_pc oxnfcons1_pc oxfcons2_pc oxnfcons2_pc oxfcons3_pc oxnfcons3_pc oxfcons4_pc oxnfcons4_pc
-				mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc pchild psenior cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
+				mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc strata pchild psenior cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
 				mi register passive xcons_pc xfcons_pc
-				
-
-				**Current method to remove negative
+				*MI method selection
 				if ("`smethod'"=="MImvn") {
 					*Multi-variate normal imputation using MCMC
 					mi impute mvn xfcons1_pc xfcons2_pc xfcons3_pc xfcons4_pc xnfcons1_pc xnfcons2_pc xnfcons3_pc xnfcons4_pc = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', add(`nI') burnin(1000)
-		
-					foreach cat in f nf {
-						forvalues i=1/4 {
-							*need to take floor to make sure rounding does not result in negative averages
-							egen double xtag`cat'`i' = rowtotal(_*_x`cat'cons`i'_pc)
-							forvalues j=1/`nI' {
-							*scale up to get average being zero (without losing the variance)
-							replace _`j'_x`cat'cons`i'_pc = _`j'_x`cat'cons`i'_pc - floor(xtag`cat'`i' /`nI'*10^5)/10^5 if xtag`cat'`i'<0
-							}
-						}
-					}	
-					drop xtag*		
 				}
-
-				
-				
-				 
-				**Current method to remove negative
-				else if inlist("`smethod'","MICE") {
+				else if inlist("`smethod'","MIchain","MICE") {
 					*Chained regressions to estimate the joint
 	*				mi impute chained (regress) xfcons1_pc xfcons2_pc xfcons3_pc xfcons4_pc xnfcons1_pc xnfcons2_pc xnfcons3_pc xnfcons4_pc = xfcons0_pc xnfcons0_pc xdurables_pc hhsize pchild psenior i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhmode i.hhplot i.hhfood i.cluster i.hhmod, add(`nI') noimp report
 					mi impute chained (regress) xfcons1_pc xfcons2_pc xfcons3_pc xfcons4_pc xnfcons1_pc xnfcons2_pc xnfcons3_pc xnfcons4_pc = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', add(`nI') report
-				
-					foreach cat in f nf {
-						forvalues i=1/4 {
-							*need to take floor to make sure rounding does not result in negative averages
-							egen double xtag`cat'`i' = rowtotal(_*_x`cat'cons`i'_pc)
-							forvalues j=1/`nI' {
-							*scale up to get average being zero (without losing the variance)
-							replace _`j'_x`cat'cons`i'_pc = _`j'_x`cat'cons`i'_pc - floor(xtag`cat'`i' /`nI'*10^5)/10^5 if xtag`cat'`i'<0
-												}
-										}
-										}
-						drop xtag*
-													}
-															
-															
-						
 				}
-			
-
-					**Two-stage MI method
-					else if inlist("`smethod'","TwostMI") {
-					
-					local mipre = "mi passive: "
-			
-					*Make dummy for Y>0:
-					forvalues imod = 1/4 {
-					gen     dxfcons`imod'_pc=1 if xfcons`imod'_pc>0 & xfcons`imod'_pc!=.
-					replace dxfcons`imod'_pc=0 if xfcons`imod'_p==0 & xfcons`imod'_pc!=.
-					gen     dxnfcons`imod'_pc=1 if xnfcons`imod'_pc>0 & xnfcons`imod'_pc!=.
-					replace dxnfcons`imod'_pc=0 if xnfcons`imod'_p==0 & xnfcons`imod'_pc!=.
-					clonevar odxfcons`imod'_pc=dxfcons`imod'_pc // keep original for dummy
-					clonevar odxnfcons`imod'_pc=dxnfcons`imod'_pc // keep original for dummy
-									}
-					
-					*set MI
-					mi set wide
-					mi register imputed xfcons1_pc xnfcons1_pc xfcons2_pc xnfcons2_pc xfcons3_pc xnfcons3_pc xfcons4_pc xnfcons4_pc dxfcons1_pc dxnfcons1_pc dxfcons2_pc dxnfcons2_pc dxfcons3_pc dxnfcons3_pc dxfcons4_pc dxnfcons4_pc
-					mi register regular oxfcons0_pc oxnfcons0_pc oxfcons1_pc oxnfcons1_pc oxfcons2_pc oxnfcons2_pc oxfcons3_pc oxnfcons3_pc oxfcons4_pc oxnfcons4_pc
-					mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc pchild psenior cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
-					mi register passive xcons_pc xfcons_pc
-									
-					*Chained regressions to estimate the joint
-					mi impute chained (regress, noisily) dxfcons1_pc (regress, conditional(if dxfcons1_pc>=.5) noisily) xfcons1_pc ///
-									  (regress, noisily) dxnfcons1_pc (regress, conditional(if dxnfcons1_pc>=.5) noisily) xnfcons1_pc /// 
-									  (regress, noisily) dxfcons2_pc  (regress, conditional(if dxfcons2_pc>=.5) noisily) xfcons2_pc ///
-									  (regress, noisily) dxnfcons2_pc (regress, conditional(if dxnfcons2_pc>=.5) noisily) xnfcons2_pc /// 
-									  (regress, noisily) dxfcons3_pc  (regress, conditional(if dxfcons3_pc>=.5) noisily) xfcons3_pc ///
-									  (regress, noisily) dxnfcons3_pc (regress, conditional(if dxnfcons3_pc>=.5) noisily) xnfcons3_pc /// 
-									  (regress, noisily) dxfcons4_pc  (regress, conditional(if dxfcons4_pc>=.5) noisily) xfcons4_pc ///
-									  (regress, noisily) dxnfcons4_pc (regress, conditional(if dxnfcons4_pc>=.5) noisily) xnfcons4_pc /// 
-						=i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', add(`nI') report 
-				
-					*Fixing negative predictions
-					foreach cat in f nf {
-						forvalues i=1/4 {
-							*need to take floor to make sure rounding does not result in negative averages
-							egen double xtag`cat'`i' = rowtotal(_*_x`cat'cons`i'_pc)
-							forvalues j=1/`nI' {
-							*scale up to get average being zero (without losing the variance)
-							replace _`j'_x`cat'cons`i'_pc = _`j'_x`cat'cons`i'_pc - floor(xtag`cat'`i' /`nI'*10^5)/10^5 if xtag`cat'`i'<0
-												}
-										}
-										}
-						drop xtag*
-															}																			
-				
-				
-		
-		
-		
-		
-					**Two-stage MI method intreg
-					else if inlist("`smethod'","TwostMITobit") {
-					
-					local mipre = "mi passive: "
-			
-					*Make l and u vars for intreg:
-					forvalues imod = 1/4 {					
-					gen uxfcons`imod'_pc=xfcons`imod'_pc
-					gen uxnfcons`imod'_pc=xnfcons`imod'_pc					
-					gen lxfcons`imod'_pc=xfcons`imod'_pc
-					gen lxnfcons`imod'_pc=xnfcons`imod'_pc
-					replace lxfcons`imod'_pc=. if xfcons`imod'_pc==0 // missing for l* when zero
-					replace lxnfcons`imod'_pc=. if xnfcons`imod'_pc==0 // missing for l* when zero
-									}
-					
-					*set MI
-					mi set wide
-					mi register passive xfcons1_pc xnfcons1_pc xfcons2_pc xnfcons2_pc xfcons3_pc xnfcons3_pc xfcons4_pc xnfcons4_pc
-					mi register regular oxfcons0_pc oxnfcons0_pc oxfcons1_pc oxnfcons1_pc oxfcons2_pc oxnfcons2_pc oxfcons3_pc oxnfcons3_pc oxfcons4_pc oxnfcons4_pc
-					mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc pchild psenior cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
-					mi register passive xcons_pc xfcons_pc
-									
-					*Chained regressions to estimate the joint
-					mi impute chained (intreg, ll(lxfcons1_pc)  ul(uxfcons1_pc)  noisily) newxfcons1_pc  ///
-									  (intreg, ll(lxnfcons1_pc) ul(uxnfcons1_pc) noisily) newxnfcons1_pc  /// 
-									  (intreg, ll(lxfcons2_pc)  ul(uxfcons2_pc)  noisily) newxfcons2_pc   ///
-									  (intreg, ll(lxnfcons2_pc) ul(uxnfcons2_pc) noisily) newxnfcons2_pc  /// 
-									  (intreg, ll(lxfcons3_pc)  ul(uxfcons3_pc)  noisily) newxfcons3_pc   ///
-									  (intreg, ll(lxnfcons3_pc) ul(uxnfcons3_pc) noisily) newxnfcons3_pc  /// 
-									  (intreg, ll(lxfcons4_pc)  ul(uxfcons4_pc)  noisily) newxfcons4_pc   ///
-									  (intreg, ll(lxnfcons4_pc) ul(uxnfcons4_pc) noisily) newxnfcons4_pc  /// 
-						=i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', add(`nI') report 
-				
-					*Fill in:
-					forvalues imod = 1/4 {					
-					`mipre' replace xfcons`imod'_pc=newxfcons`imod'_pc 
-					`mipre' replace xnfcons`imod'_pc=newxnfcons`imod'_pc
-									}
-					
-					*Fixing negative predictions
-					foreach cat in f nf {
-						forvalues i=1/4 {
-							*need to take floor to make sure rounding does not result in negative averages
-							egen double xtag`cat'`i' = rowtotal(_*_x`cat'cons`i'_pc)
-							forvalues j=1/`nI' {
-							*scale up to get average being zero (without losing the variance)
-							replace _`j'_x`cat'cons`i'_pc = _`j'_x`cat'cons`i'_pc - floor(xtag`cat'`i' /`nI'*10^5)/10^5 if xtag`cat'`i'<0
-												}
-										}
-										}
-						drop xtag*
-															}																			
-				
-				
-				*Single MI regress
-				else if ("`smethod'"=="MIreg") {
-				
-				local mipre = "mi passive: "
-				
-				*set MI
-				mi set wide
-				mi register imputed xfcons1_pc xnfcons1_pc xfcons2_pc xnfcons2_pc xfcons3_pc xnfcons3_pc xfcons4_pc xnfcons4_pc
-				mi register regular oxfcons0_pc oxnfcons0_pc oxfcons1_pc oxnfcons1_pc oxfcons2_pc oxnfcons2_pc oxfcons3_pc oxnfcons3_pc oxfcons4_pc oxnfcons4_pc
-				mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc pchild psenior cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
-				mi register passive xcons_pc xfcons_pc
-				mi set M=`nI'
-
-				forvalues imod = 1/`M' {
-					*food
-					*mi impute reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model'           [aweight=weight] , add(`nI') 
-					mi impute reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model'           [aweight=weight] , replace noisily 
-					*non-food
-					*mi impute reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model'           [aweight=weight] , add(`nI')
-					mi impute reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model'           [aweight=weight] , replace noisily
-					}
-	
-				*Fixing negative predictions
-					foreach cat in f nf {
-						forvalues i=1/4 {
-							*need to take floor to make sure rounding does not result in negative averages
-							egen double xtag`cat'`i' = rowtotal(_*_x`cat'cons`i'_pc)
-							forvalues j=1/`nI' {
-							*scale up to get average being zero (without losing the variance)
-							replace _`j'_x`cat'cons`i'_pc = _`j'_x`cat'cons`i'_pc - floor(xtag`cat'`i' /`nI'*10^5)/10^5 if xtag`cat'`i'<0
-												}
-										}
-										}
-						drop xtag*
-
-												}
-			
-		
-		
-			
-			*Single MI Tobit
-			else if ("`smethod'"=="MItobit") {
-		
-				local mipre = "mi passive: "
-					
-				*Make l and u vars for intreg:
-					forvalues imod = 1/4 {					
-					gen double uxfcons`imod'_pc=xfcons`imod'_pc
-					gen double uxnfcons`imod'_pc=xnfcons`imod'_pc					
-					gen double lxfcons`imod'_pc=xfcons`imod'_pc
-					gen double lxnfcons`imod'_pc=xnfcons`imod'_pc
-					replace lxfcons`imod'_pc=. if xfcons`imod'_pc==0 // missing for l* when zero
-					replace lxnfcons`imod'_pc=. if xnfcons`imod'_pc==0 // missing for l* when zero
-									}
-					
-					*set MI
-					mi set wide
-					mi register passive xfcons1_pc xnfcons1_pc xfcons2_pc xnfcons2_pc xfcons3_pc xnfcons3_pc xfcons4_pc xnfcons4_pc
-					mi register regular oxfcons0_pc oxnfcons0_pc oxfcons1_pc oxnfcons1_pc oxfcons2_pc oxnfcons2_pc oxfcons3_pc oxnfcons3_pc oxfcons4_pc oxnfcons4_pc
-					mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc pchild psenior cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
-					mi register passive xcons_pc xfcons_pc
-					mi set M=`nI'
-
-
-				forvalues imod = 1/`M' {
-					*food
-					mi impute intreg newxfcons`imod'_pc ///
-						i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', ll(lxfcons`imod'_pc)  ul(uxfcons`imod'_pc)  noisily replace
-				
-					*non-food
-					mi impute intreg newxnfcons`imod'_pc  ///
-						i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', ll(lxnfcons`imod'_pc) ul(uxnfcons`imod'_pc) noisily replace
-						
-										}
-					
-					*Fill in:
-					forvalues imod = 1/4 {					
-					`mipre' replace xfcons`imod'_pc=newxfcons`imod'_pc 
-					`mipre' replace xnfcons`imod'_pc=newxnfcons`imod'_pc
-									}
-										
-	
-					*Fixing negative predictions
-					foreach cat in f nf {
-						forvalues i=1/4 {
-							*need to take floor to make sure rounding does not result in negative averages
-							egen double xtag`cat'`i' = rowtotal(_*_x`cat'cons`i'_pc)
-							forvalues j=1/`nI' {
-							*scale up to get average being zero (without losing the variance)
-							replace _`j'_x`cat'cons`i'_pc = _`j'_x`cat'cons`i'_pc - floor(xtag`cat'`i' /`nI'*10^5)/10^5 if xtag`cat'`i'<0
-												}
-										}
-										}
-						drop xtag*
-
-												}
-		
-		
-
-			*Single MI two part models
-			else if ("`smethod'"=="MItwopart") {
-
-					local mipre = "mi passive: "
-			
-					*Make dummy for Y>0:
-					forvalues imod = 1/4 {
-					gen     dxfcons`imod'_pc=1 if xfcons`imod'_pc>0 & xfcons`imod'_pc!=.
-					replace dxfcons`imod'_pc=0 if xfcons`imod'_p==0 & xfcons`imod'_pc!=.
-					gen     dxnfcons`imod'_pc=1 if xnfcons`imod'_pc>0 & xnfcons`imod'_pc!=.
-					replace dxnfcons`imod'_pc=0 if xnfcons`imod'_p==0 & xnfcons`imod'_pc!=.
-					clonevar odxfcons`imod'_pc=dxfcons`imod'_pc // keep original for dummy
-					clonevar odxnfcons`imod'_pc=dxnfcons`imod'_pc // keep original for dummy
-									}
-					
-					*set MI
-					mi set wide
-					mi register imputed xfcons1_pc xnfcons1_pc xfcons2_pc xnfcons2_pc xfcons3_pc xnfcons3_pc xfcons4_pc xnfcons4_pc dxfcons1_pc dxnfcons1_pc dxfcons2_pc dxnfcons2_pc dxfcons3_pc dxnfcons3_pc dxfcons4_pc dxnfcons4_pc
-					mi register regular oxfcons0_pc oxnfcons0_pc oxfcons1_pc oxnfcons1_pc oxfcons2_pc oxnfcons2_pc oxfcons3_pc oxnfcons3_pc oxfcons4_pc oxnfcons4_pc
-					mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc pchild psenior cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
-					mi register passive xcons_pc xfcons_pc
-					mi set M=`nI'
-
-					
-					forvalues imod = 1/`M' {
-					*Two-stage MI regressions to estimate each of equations:
-					*Food
-					mi impute chained (logit, noisily augment) dxfcons`imod'_pc (regress, conditional(if dxfcons`imod'_pc>=.5) noisily) xfcons`imod'_pc ///
-							=i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', report replace 
-					*Non-food
-					mi impute chained (logit, noisily augment) dxnfcons`imod'_pc (regress, conditional(if dxnfcons`imod'_pc>=.5) noisily) xnfcons`imod'_pc ///
-							=i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', report replace
-											
-											}
-				
-					*Fixing negative predictions
-					foreach cat in f nf {
-						forvalues i=1/4 {
-							*need to take floor to make sure rounding does not result in negative averages
-							egen double xtag`cat'`i' = rowtotal(_*_x`cat'cons`i'_pc)
-							forvalues j=1/`nI' {
-							*scale up to get average being zero (without losing the variance)
-							replace _`j'_x`cat'cons`i'_pc = _`j'_x`cat'cons`i'_pc - floor(xtag`cat'`i' /`nI'*10^5)/10^5 if xtag`cat'`i'<0
-												}
-										}
-										}
-						drop xtag*
-											}																					
-		
-		
-		
-		
-		
+				else {
+					di as error "MI Method `smethod' not known."
+					error 1
+				}
+			}
 			*build aggregates; but replace with originals if available
 			quiet: `mipre' replace xfcons_pc = 0
 			quiet: foreach v of varlist xfcons?_pc {
@@ -1075,11 +532,9 @@ program define RCS_simulate
 	}
 end
 
-
-
 capture: program drop RCS_collate
 program define RCS_collate
-	syntax using/, dirbase(string) nsim(integer) nmi(integer) lmethod(namelist) povline(varname) deflator(varname)
+	syntax using/, dirbase(string) nsim(integer) nmi(integer) lmethod(namelist)
 	*prepare output directories
 	local lc_sdTemp = "`dirbase'/Temp"
 	local lc_sdOut = "`dirbase'/Out"
@@ -1121,7 +576,7 @@ program define RCS_collate
 				file write fh _n
 			}
 			*estimations
-			if inlist("`smethod'","med","avg","reg","reg2","reg3") {
+			if inlist("`smethod'","med","avg","reg","tobit") {
 				file write fh "`isim'" _tab "1"
 				foreach id of local xhh {
 					quiet: summ xcons_pc if hhid==`id'
@@ -1129,18 +584,7 @@ program define RCS_collate
 				}
 				file write fh _n
 			}
-			*estimations
-			if inlist("`smethod'","tobit","tobit2","tobit3","twopart","twopart2","twopart3","twopartII") {
-				file write fh "`isim'" _tab "1"
-				foreach id of local xhh {
-					quiet: summ xcons_pc if hhid==`id'
-					file write fh _tab (r(mean))
-				}
-				file write fh _n
-			}
-			
-			
-			else if inlist("`smethod'","MImvn","MIchain","MICE","MImvn2", "TwostMI", "TwostMITobit","MIreg", "MItobit","MItwopart") {
+			else if inlist("`smethod'","MImvn","MIchain","MICE","MImvn2") {
 				*extract imputations
 				forvalues iter=1/`nI' {
 					use "`lc_sdTemp'/sim_`smethod'_`isim'.dta", clear
@@ -1160,7 +604,7 @@ program define RCS_collate
 		*summarize imputations for MI
 		quiet: reshape long hh, i(simulation imputation) j(hhid)
 		ren hh est
-		merge m:1 hhid using "`using'", nogen keep(match) keepusing(weight cluster `povline' `deflator')
+		quiet: merge m:1 hhid using "`using'", nogen keep(match) keepusing(weight cluster)
 		*get reference
 		quiet: gen x = est if simulation==0
 		quiet: bysort hhid: egen ref = max(x)
@@ -1173,22 +617,13 @@ program define RCS_collate
 		drop x
 		quiet: drop if simulation==-1
 		order red, after(ref)
-		*deflate consumption variables:
-		foreach var of var ref red est {
-		gen n_`var'=`var'
-		label var n_`var' "Nominal `var'"
-		replace `var'=`var'/`deflator'
-		label var `var' "Deflated `var'"
-		}
-	
-		*remove outliers only for prediction
-		*quiet: summ ref,d
-		*quiet: replace ref = `r(p99)' if ref>`r(p99)'
+		*remove outliers for ref and est
+		quiet: summ ref,d
+		quiet: replace ref = `r(p99)' if ref>`r(p99)'
 		quiet: summ red,d
 		quiet: replace red = `r(p99)' if red>`r(p99)'
 		quiet: summ est,d
 		quiet: replace est = `r(p99)' if est>`r(p99)'
-		
 		*save for analysis
 		save "`lc_sdTemp'/simd_`smethod'_imp.dta", replace
 		*collapse imputations
@@ -1203,7 +638,7 @@ end
 	
 capture: program drop RCS_analyze
 program define RCS_analyze
-	syntax using/, dirbase(string) lmethod(namelist)  povline(varname) deflator(varname)
+	syntax using/, dirbase(string) lmethod(namelist) povline(real)
 	*prepare output directories
 	local lc_sdTemp = "`dirbase'/Temp"
 	local lc_sdOut = "`dirbase'/Out"
@@ -1233,7 +668,6 @@ program define RCS_analyze
 	file write fh _tab (r(bias)) _tab (r(se)) _n
 	*add other methods
 	foreach smethod of local lmethod {
-		di "Calculating distribution of Y for `smethod':"
 		use "`lc_sdTemp'/simd_`smethod'.dta", clear
 		file write fh "`smethod'"
 		*calculate relative difference at hh-level
@@ -1304,7 +738,6 @@ program define RCS_analyze
 	file write fh _n
 	*add other methods
 	quiet: foreach smethod of local lmethod {
-		di "Calculating poverty and inequality estimates for `smethod':"
 		file write fh "`smethod'"
 		*prepare dataset
 		use "`lc_sdTemp'/simd_`smethod'_imp.dta", clear
@@ -1345,8 +778,6 @@ program define RCS_analyze
 		graph drop `gl_`sind'' cmb_`sind'
 	}
 end
-
-/*
 	
 capture: program drop RCS_run
 program define RCS_run

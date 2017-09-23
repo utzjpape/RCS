@@ -16,28 +16,6 @@ if (inlist("${suser}","wb390290","WB390290")) {
 	*Box directory where the Data folder can be located
 	local swdBox = "C:\Users\wb390290\Box Sync\Home\Research\RCS\Shared\DataBox"
 }
-if (inlist("${suser}","wb252129","WB252129")) {
-	*Shinya
-	*Local directory of your checked out copy of the code
-	local swdLocal = "C:\Users\wb252129\Box Sync\RapidCons\RCS\trunk"
-	*Box directory where the Data folder can be located
-	local swdBox = "C:\Users\wb252129\Box Sync\Shared\DataBox"
-}
-*Aroob
-else if (inlist("${suser}","wb504672","WB504672")) {	
-	*Local directory of your checked out copy of the code
-	local swdLocal = "C:\Users\WB504672\OneDrive - WBG\GLB-RCS"
-	*Box directory where the Data folder can be located
-	local swdBox = "C:\Users\WB504672\WBG\Utz Johann Pape - Sh-SDN-HDPI\NBHS_2009"
-	local swdCurl = "C:\Users\wb504672\Documents"
-}
-*Luca
-else if (inlist("${suser}","wb502620","WB502620")) {	
-	*Local directory of your checked out copy of the code
-	local swdLocal = "C:\Users\wb502620\Box Sync/LP Data files/Code/RCS/trunk"
-	*Box directory where the Data folder can be located
-	local swdBox = "C:\Users\wb502620\Box Sync\HCE 2011"
-}
 else {
 	di as error "Configure work environment in 00-init.do before running the code."
 	error 1
@@ -50,21 +28,10 @@ global gsdTemp = "`swdLocal'/Temp"
 global gsdOutput = "`swdLocal'/Output"
 global gsdDataBox = "`swdBox'"
 
-**If needed, install the directories and packages used in the process 
-capture confirm file "`swdLocal'/Data/nul"
-scalar define n_data=_rc
-capture confirm file "`swdLocal'/Temp/nul"
-scalar define n_temp=_rc
-capture confirm file "`swdLocal'/Output/nul"
-scalar define n_output=_rc
-scalar define check=n_data+n_temp+n_output
-di check
+*If you have not yet installed the directories and folders below, set local to 1
+local installfolders = 0
 
-if check==0 {
-		display "No action needed"
-}
-
-else {
+if (`installfolders'==1) {
 	mkdir "${gsdData}"
 	mkdir "${gsdTemp}"
 	mkdir "${gsdOutput}"

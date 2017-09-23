@@ -1,11 +1,4 @@
-***************************************************************
-*SOM Simulation using the entire data (in addition to HERGAISA)
-** Note 1: We use the deflator (by district and urban/rural) . 
-** Note 2: The poverty lines are separately defined for urban and rural areas. We use the deflator (by district and urban/rural) 
-** Note 3: Four households has zero non-food consumption, and these households are deleted as in the official data (rnonfood==0 in SOM-SLHS13\wfilez.dta). 
-** Note 4: To get official numbers, we need to drop households without the flow from durable goods ownership (xdurables_pc==.)
-** Note 5: 1,717 HHs are used for poverty calculation for official poverty estimates.
-***************************************************************
+*SIMULATE PARTIAL SURVEYS FOR HERGAISA
 
 clear all
 ma drop all
@@ -17,40 +10,23 @@ local M = 4
 *number of simulations
 local N = 20
 *number of imputations 
-local nI = 20
+local nI = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
 local ndiff = 3
 
 *methods
-local lmethod = "med avg reg reg2 reg3 tobit tobit2 tobit3 twopart twopart2 twopart3 twopartII1 twopartII2 twopartII3 MICE MImvn"
-local lmethod="TwostMI"
-local lmethod = "med avg reg tobit twopart MIreg MItobit MItwopart MICE MImvn TwostMITobit TwostMI"
-local lmethod = "med avg reg tobit twopart MIreg MItwopart MICE MImvn TwostMI"
-local lmethod = "MIreg MItobit MItwopart"
-local lmethod = "med avg reg tobit twopart MIreg MItobit MItwopart MICE MImvn TwostMITobit TwostMI"
-local lmethod = "avg med reg tobit twopart MIreg MItobit MItwopart MICE MImvn TwostMITobit TwostMI"
-local lmethod = "avg med reg tobit twopart twopartII MIreg MItobit MItwopart MICE MImvn TwostMITobit TwostMI" // all
-*local lmethod = "avg med reg tobit twopart twopartII MIreg MItobit MItwopart MICE MImvn  TwostMI" // TwostMITobit excluded
-*local lmethod = "avg med reg tobit twopart MICE" 
+local lmethod = "med avg reg tobit MICE MImvn"
 
 *data directory
-local sData = "${gsdDataBox}/SOM-SLHS13"
+local sData = "${g_sdData}/SOM/SLHS13"
 
-*NOT used: deflator to divide nominal expenditures by and poverty line for urban Hargeiza
-*NOT used: local xdeflator = 1.094426
-local xdeflator = 1 // Does nothing
+*deflator to divide nominal expenditures by and poverty line for urban Hargeiza
+local xdeflator = 1.094426
+local xpovline = 184.1037
+*local xfline = 112.686
 
-/*
-Only for food
-	gen rf1=pcxfood/1.029 if urban==1 // deflator from the median
-	replace rf1=pcxfood/.915  if urban==2 // deflator from the median
-For non-food, use 1. 	
-*/
-	
-
-include "${gsdDo}/fRCS.do"
-local lc_sdBase = "${gsdOutput}/SOM/d`ndiff'm`M'"
-capture: mkdir "${gsdOutput}/SOM"
+include "${l_sdDo}/fRCS.do"
+local lc_sdBase = "${l_sdOut}/SOM/d`ndiff'm`M'"
 capture: mkdir "`lc_sdBase'"
 local lc_sdTemp = "`lc_sdBase'/Temp"
 capture: mkdir "`lc_sdTemp'"
@@ -63,18 +39,18 @@ capture: mkdir "`lc_sdOut'"
 *as the consumption aggregate implicitly assumes.
 *food consumption
 use "`sData'/food_consumption_clean.dta", clear
+drop if strata ~= 1
 keep hhid foodid xfood
-*replace xfood = xfood / `xdeflator' if xfood<.
+replace xfood = xfood / `xdeflator' if xfood<.
 fItems2RCS, hhid(hhid) itemid(foodid) value(xfood)
 save "`lc_sdTemp'/HH-FoodItems.dta", replace
 *non food consumption
 use "`sData'/non_food_clean.dta", clear
 keep hhid nonfoodid xnonfood
-*replace xnonfood = xnonfood / `xdeflator' if xnonfood<.
+replace xnonfood = xnonfood / `xdeflator' if xnonfood<.
 fItems2RCS, hhid(hhid) itemid(nonfoodid) value(xnonfood)
 save "`lc_sdTemp'/HH-NonFoodItems.dta", replace
 
-/*
 *get confidence interval for poverty
 use "`sData'/wfilez.dta", clear
 drop if strata ~= 1
@@ -88,7 +64,6 @@ egen r = rank(x)
 sort x
 twoway (scatter ratio r) (qfit ratio r), title("Hergeiza")
 graph export "`lc_sdOut'\Hergeiza_fshare.png", as(png) replace
-*/
 
 *get household characteristics
 use "`sData'/data_i_proc_public.dta", clear
@@ -106,83 +81,51 @@ ren S13_G04_* hhcook_*
 drop hhcook_7 hhcook_99 hhcook_4
 *simplify by setting missing values to conservative answers
 recode hhhouse (99=7) (.=7)
-*recode hhwater (99=8) (.=8) (5=8)
-recode hhwater (99=8) (.=8) (5=8) (7=8) (3=1) //ST modified
-label define G03A 1 "Public water", modify
+recode hhwater (99=8) (.=8) (5=8)
 recode hhtoilet (99=2) (.=2) (4=3)
 recode hhsleep (99=2) (.=2)
 recode hhmaterial (99=5) (.=5) (4=5)
 recode hhmode (5=4) (99=4) (.=4) (3=4)
-recode hhfood (99=2) (.=2)
+recode hhfood (99=2) (.=4)
+drop if strata ~= 1
 *add variables
 gen pchild = nchild / hhsize
 gen psenior = nsenior / hhsize
 gen pwork = nwork / hhsize
 gen bwork = nwork>0
 *add durables and food and non-food
-merge 1:1 hhid using "`sData'/wfilez.dta", nogen keep(match) keepusing(xdurables_pc district urban)
+merge 1:1 hhid using "`sData'/wfilez.dta", nogen keep(match) keepusing(xdurables_pc)
 merge 1:1 hhid using "`lc_sdTemp'/HH-FoodItems.dta", nogen keep(match) keepusing(xfood*)
 merge 1:1 hhid using "`lc_sdTemp'/HH-NonFoodItems.dta", nogen keep(match) keepusing(xnonfood*)
-merge m:1 district urban using "`sData'/paasche.dta", nogen
-rename paaschemed deflator
-gen povline=207.3 if urban==1 // (Upper pline) Taken from Table 13 on p.128 in the new report
-replace povline=180.9 if urban==0 // (Upper pline) Taken from Table 13 on p.128 in the new report
-egen totnfood=rowtotal(xnonfood*)
-drop if totnfood==0 // 4 HHs with nonfood consumption=0 will be dropped. 
-drop totnfood
-drop if xdurables_pc==.
-*drop if strata ~= 1
 save "`lc_sdTemp'/HHData.dta", replace
-
-/*
-use "`lc_sdTemp'/HHData.dta", clear
-keep xfood* 
-des
-*105 food items.
-use "`lc_sdTemp'/HHData.dta", clear
-keep xnonfood* 
-des
-*85 non-food items.
-*/
 
 *start RCS code
 *run simulation
 local using= "`lc_sdTemp'/HHData.dta"
-local dirout = "${gsdOutput}/SOM"
+local dirout = "${l_sdOut}/SOM"
 local nmodules = `M'
 local ncoref = 33
 local ncorenf = 25
 local ndiff=`ndiff'
 local nsim = `N'
 local nmi = `nI'
-*local povline = `xpovline'
+local povline = `xpovline'
 local lmethod = "`lmethod'"
-*local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood" (ST)
-local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet io5.hhmaterial i.hhfood"
 local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood"
-local model2 = "hhsize pchild bwork i.hhsex"
-local model3 = " "
 local rseed = 23081980
 
-
+include "${l_sdDo}/fRCS.do"
 *RCS_run using "`lc_sdTemp'/HHData.dta", dirout("${l_sdOut}") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'") rseed(`rseed')
 local dirbase = "`dirout'/d`ndiff'm`nmodules'"
-
 RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
 RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed')
-
-RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") model2("`model2'") model3("`model3'") rseed(`rseed')
-*RCS_collate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") // (ST) dropped unnecessary options
-
-RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")  povline(povline) deflator(deflator)
-
-RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(povline) deflator(deflator)
-
-/*
+RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
+RCS_collate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
+RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
 
 *subrun
 if (1==2) {
-	include "${gsdDo}/fRCS.do"
+	include "${l_sdDo}/fRCS.do"
 	RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("tobit") model("`model'") rseed(`rseed')
 	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("tobit")
 	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
