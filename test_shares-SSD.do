@@ -1,5 +1,3 @@
-*SIMULATE PARTIAL SURVEYS FOR HERGAISA
-
 clear all
 ma drop all
 set more off
@@ -132,27 +130,3 @@ local model = "hhsize pchild psenior i.hhsex i.hhwater i.hhcook hhsleep i.hhhous
 include "${l_sdDo}/fRCS.do"
 *RCS_run using "`lc_sdTemp'/HHData.dta", dirout("${l_sdOut}") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'")
 RCS_prepare using "`using'", dirout("`dirout'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
-RCS_assign using "`using'", dirout("`dirout'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim')
-RCS_simulate using "`using'", dirout("`dirout'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'")
-RCS_collate using "`using'", dirout("`dirout'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
-RCS_analyze using "`using'", dirout("`dirout'") nmodules(`nmodules') ndiff(`ndiff') lmethod("`lmethod'") povline(`povline')
-
-*subrun
-include "${l_sdDo}/fRCS.do"
-RCS_simulate using "`using'", dirout("`dirout'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("MImvn2") model("`model'")
-RCS_collate using "`using'", dirout("`dirout'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("MImvn2")
-RCS_analyze using "`using'", dirout("`dirout'") nmodules(`nmodules') ndiff(`ndiff') lmethod("`lmethod'") povline(`povline')
-
-
-
-
-
-*check error relative to consumption -> lower incomes have larger positive error (over-estimation)
-*while higher incomes are slightly under-estimated
-use "C:\Users\wb390290\Box Sync\Home\Research\RCS\Out\d3m4\Temp\simd_MImvn2_imp.dta", clear
-collapse (mean) est ref, by(simulation hhid cluster weight)
-gen x = (est - ref) / ref * 100
-collapse (mean) x ref, by(hhid cluster weight)
-egen r = rank(ref)
-graph twoway (scatter x r) (lfit x r)
-
