@@ -352,48 +352,58 @@ program define RCS_assign
 		*check whether administered consumption is equal to module consumption
 		egen xt_items = rowtotal(xfitem*)
 		egen xt_mods = rowtotal(xfcons?)
-		assert round(xt_items-xt_mods,2)==0
+		assert round(xt_items-xt_mods,.1)==0
 		drop xt_*
 		save "`lc_sdTemp'/hh-food-consumption.dta", replace
-
-		
-		*CONTINUE FROM HERE!
 		
 		*NON-FOOD CONSUMPTION
 		use "`lc_sdTemp'/HH-NonFood.dta", clear
 		*get household assigned module
-		quiet: merge m:1 hhid using "`lc_sdTemp'/HH-ModuleAssignment.dta", nogen keep(match) keepusing(hhmod_nf)
-		ren hhmod_nf hhmod
+		quiet: merge m:1 hhid using "`lc_sdTemp'/HH-ModuleAssignment.dta", nogen assert(match) keepusing(hhmod_f)
+		ren hhmod_f hhmod
 		*add food assigned  module
-		quiet: merge m:1 nonfoodid using "`lc_sdTemp'/fsim_nfpartition.dta", nogen keep(match) keepusing(itemmod itemred)
+		quiet: merge m:1 nonfoodid using "`lc_sdTemp'/fsim_nfpartition.dta", nogen assert(match) keepusing(itemmod itemred)
 		*get total food consumption
-		quiet: bysort hhid: egen xnonfood_t = sum(xnonfood)
+		quiet: bysort hhid: egen xnfcons_t = sum(xnonfood)
 		*get reduced food consumption
-		gen xnonfred = xnonfood if itemred
-		quiet: bysort hhid: egen xnonfood_r = sum(xnonfred)
-		drop xnonfred
-		*randomly assign module to households
+		gen xnfred = xnonfood if itemred
+		quiet: bysort hhid: egen xnfcons_r = sum(xnfred)
+		drop xnfred itemred
+		*remove consumption that is not assigned
 		quiet: replace xnonfood = . if (itemmod>0) & (itemmod!=hhmod)
-		*aggregate by modules; use itemmod to consider core module
-		collapse (sum) xnonfood (mean) xnonfood_t xnonfood_r, by(hhid hhmod itemmod)
-		keep hhid xnonfood xnonfood_t xnonfood_r hhmod itemmod 
-		ren xnonfood* xnfcons*
-		quiet: reshape wide xnfcons, i(hhid hhmod xnfcons_t xnfcons_r) j(itemmod)
-		*ensure zero entries are not missing
-		forvalues jmod = 1/`M' {
-			quiet: replace xnfcons`jmod' = 0 if (xnfcons`jmod'>=.) & (hhmod==`jmod')
-			quiet: replace xnfcons`jmod' = . if (hhmod!=`jmod')
+		*add binary yes/no indicator whether food is consumed (for assigned modules)
+		quiet: gen bnfitem = xnonfood>0 if !missing(xnonfood)
+		*create module consumption
+		forvalues kmod = 0/`M' {
+			quiet: bysort hhid itemmod: egen cxnfood`kmod' = total(xnonfood) if (itemmod==`kmod') & ((`kmod'==0) | (hhmod==`kmod'))
+			quiet: bysort hhid: egen xnfcons`kmod' = max(cxnfood`kmod')
+			drop cxnfood`kmod'
 		}
+		ren xnonfood xnfitem
+		drop itemmod
+		quiet: reshape wide xnfitem bnfitem, i(hhid hhmod weight xnfcons*) j(nonfoodid)
+		keep hhid hhmod weight xnfcons* xnfitem* bnfitem* 
+		order hhid hhmod weight xnfcons* xnfitem* bnfitem*
+		*ensure assigned modules are not missing and non-assigned are missing
+		forvalues jmod = 1/`M' {
+			assert !missing(xnfcons`jmod') if (hhmod==`jmod')
+			assert missing(xnfcons`jmod') if (hhmod!=`jmod')
+		}
+		*check whether administered consumption is equal to module consumption
+		egen xt_items = rowtotal(xnfitem*)
+		egen xt_mods = rowtotal(xnfcons?)
+		assert round(xt_items-xt_mods,.1)==0
+		drop xt_*
 		save "`lc_sdTemp'/hh-nonfood-consumption.dta", replace
-		*merge datasets
+
+		*merge food and non-food
 		use "`using'", clear
 		drop xfood* xnonfood*
 		quiet: merge 1:1 hhid using "`lc_sdTemp'/hh-food-consumption.dta", nogen assert(master match)
 		quiet: merge 1:1 hhid using "`lc_sdTemp'/hh-nonfood-consumption.dta", nogen assert(master match)
-		order x*, last
-		*there are a few households apparently without consumption, we drop them
-		quiet: drop if xfcons0>=.
-		capture: quiet: drop if hhcook_1>=.
+		order xfcons* xnfcons* xf* bf* xnf* bnf*, last
+		*ensure all households have core consumption
+		assert((xfcons0>0) & !missing(xfcons0))
 		*get per capita variables
 		ren (x*cons_t x*cons_r) (c*cons r*cons)
 		foreach v of varlist xfcons* xnfcons* cfcons cnfcons rfcons rnfcons {
@@ -403,7 +413,6 @@ program define RCS_assign
 		foreach v of varlist xfcons0_pc xnfcons0_pc xdurables_pc {
 			xtile p`v' = `v' [pweight=weight], nquantiles(4)
 		}
-
 		*prepare check variables
 		quiet: gen ccons_pc = cfcons_pc + cnfcons_pc + xdurables_pc
 		quiet: gen rcons_pc = rfcons_pc + rnfcons_pc + xdurables_pc
