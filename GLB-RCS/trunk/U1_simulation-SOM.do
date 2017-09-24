@@ -89,6 +89,8 @@ gen bwork = nwork>0
 merge 1:1 hhid using "`sData'/wfilez.dta", nogen keep(match) keepusing(xdurables_pc)
 merge 1:1 hhid using "${gsdTemp}/SOM-HH-FoodItems.dta", nogen keep(match) keepusing(xfood*)
 merge 1:1 hhid using "${gsdTemp}/SOM-HH-NonFoodItems.dta", nogen keep(match) keepusing(xnonfood*)
+*remove a few records (e.g. without consumption)
+drop if missing(hhcook_1)
 save "${gsdTemp}/SOM-HHData.dta", replace
 
 *start RCS code
@@ -99,7 +101,6 @@ local ncoref = 33
 local ncorenf = 25
 local ndiff=`ndiff'
 local nsim =`N'
-local nsim = 1
 local nmi = `nI'
 local povline = `xpovline'
 local lmethod = "`lmethod'"
@@ -112,7 +113,7 @@ include "${gsdDo}/fRCS.do"
 RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
 RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed')
 RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
-RCS_collate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
+RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
 RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
 
 *subrun
