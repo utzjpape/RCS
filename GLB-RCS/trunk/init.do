@@ -9,12 +9,6 @@ set maxvar 10000
 set seed 23081980 
 set sortseed 11041955
 
-*To run the code for Sudan: 
-*Please set one drive directory to Utz Johann Pape - Sh-SDN-HDPI\NBHS_2009
-*To run code for Nigeria:
-*Please set one drive directory to Utz Johann Pape - Shared-NigDispl\Data
-*To run the code for Ethiopia:
-*Please set one drive directory to Utz Johann Pape - Shared-EthDispl\HCE 2011
 
 if (inlist("${suser}","wb390290","WB390290")) {
 	*Utz
@@ -28,7 +22,7 @@ else if (inlist("${suser}","wb504672","WB504672")) {
 	*Local directory of your checked out copy of the code
 	local swdLocal = "C:\Users\WB504672\OneDrive - WBG\SVN\GLB-RCS"
 	*One Drive directory where the Data folder can be located
-	local swdBox = "C:\Users\WB504672\WBG\Utz Johann Pape - Shared-EthDispl\HCE 2011"
+	local swdBox = "C:\Users\WB504672\WBG\Utz Johann Pape - DataBox"
 	local swdCurl = "C:\Users\wb504672\Documents"
 }
 *Luca
