@@ -287,7 +287,7 @@ end
 
 capture: program drop RCS_assign
 program define RCS_assign
-	syntax using/, dirbase(string) nmodules(integer) nsim(integer) rseed(integer)
+	syntax using/, dirbase(string) nmodules(integer) nsim(integer) rseed(integer) [Prob(real 1.0)]
 	set seed `rseed'
 	local N = `nsim'
 	local M = `nmodules'
@@ -323,22 +323,28 @@ program define RCS_assign
 		ren hhmod_f hhmod
 		*add food assigned  module
 		quiet: merge m:1 foodid using "`lc_sdTemp'/fsim_fpartition.dta", nogen assert(match) keepusing(itemmod itemred)
-		*get total food consumption
-		quiet: bysort hhid: egen xfcons_t = sum(xfood)
 		*get reduced food consumption
-		gen xfred = xfood if itemred
+		quiet: gen xfred = xfood if itemred
 		quiet: bysort hhid: egen xfcons_r = sum(xfred)
 		drop xfred itemred
 		*remove consumption that is not assigned
-		quiet: replace xfood = . if (itemmod>0) & (itemmod!=hhmod)
-		*add binary yes/no indicator whether food is consumed (for assigned modules)
+		quiet: replace xfood = .z if (itemmod>0) & (itemmod!=hhmod)
+		*add binary yes/no indicator whether food is consumed
 		quiet: gen bfitem = xfood>0 if !missing(xfood)
+		quiet: replace bfitem = .z if xfood==.z
+		*mask consumption items with defined probability (if not administered)
+		quiet: gen r = runiform() if ~missing(bfitem)
+		quiet: replace xfood = .y if ~missing(r) & (r>`prob')
+		drop r
+		*get total food consumption
+		quiet: bysort hhid: egen xfcons_t = sum(xfood)
 		*create module consumption
 		forvalues kmod = 0/`M' {
 			quiet: bysort hhid itemmod: egen cxfood`kmod' = total(xfood) if (itemmod==`kmod') & ((`kmod'==0) | (hhmod==`kmod'))
 			quiet: bysort hhid: egen xfcons`kmod' = max(cxfood`kmod')
 			drop cxfood`kmod'
 		}
+		*make items columns and one record per hh
 		ren xfood xfitem
 		drop itemmod
 		quiet: reshape wide xfitem bfitem, i(hhid hhmod weight xfcons*) j(foodid)
@@ -363,22 +369,28 @@ program define RCS_assign
 		ren hhmod_f hhmod
 		*add food assigned  module
 		quiet: merge m:1 nonfoodid using "`lc_sdTemp'/fsim_nfpartition.dta", nogen assert(match) keepusing(itemmod itemred)
-		*get total food consumption
-		quiet: bysort hhid: egen xnfcons_t = sum(xnonfood)
 		*get reduced food consumption
-		gen xnfred = xnonfood if itemred
+		quiet: gen xnfred = xnonfood if itemred
 		quiet: bysort hhid: egen xnfcons_r = sum(xnfred)
 		drop xnfred itemred
 		*remove consumption that is not assigned
-		quiet: replace xnonfood = . if (itemmod>0) & (itemmod!=hhmod)
+		quiet: replace xnonfood = .z if (itemmod>0) & (itemmod!=hhmod)
 		*add binary yes/no indicator whether food is consumed (for assigned modules)
 		quiet: gen bnfitem = xnonfood>0 if !missing(xnonfood)
+		quiet: replace bnfitem = .z if xnonfood==.z
+		*mask consumption items with defined probability (if not administered)
+		quiet: gen r = runiform() if ~missing(bnfitem)
+		quiet: replace xnonfood = .y if ~missing(r) & (r>`prob')
+		drop r
+		*get total consumption
+		quiet: bysort hhid: egen xnfcons_t = sum(xnonfood)
 		*create module consumption
 		forvalues kmod = 0/`M' {
 			quiet: bysort hhid itemmod: egen cxnfood`kmod' = total(xnonfood) if (itemmod==`kmod') & ((`kmod'==0) | (hhmod==`kmod'))
 			quiet: bysort hhid: egen xnfcons`kmod' = max(cxnfood`kmod')
 			drop cxnfood`kmod'
 		}
+		*make items columns and one record per hh
 		ren xnonfood xnfitem
 		drop itemmod
 		quiet: reshape wide xnfitem bnfitem, i(hhid hhmod weight xnfcons*) j(nonfoodid)
@@ -392,7 +404,7 @@ program define RCS_assign
 		*check whether administered consumption is equal to module consumption
 		egen xt_items = rowtotal(xnfitem*)
 		egen xt_mods = rowtotal(xnfcons?)
-		assert round(xt_items-xt_mods,.1)==0
+		if (`prob'==1) assert round(xt_items-xt_mods,.1)==0
 		drop xt_*
 		save "`lc_sdTemp'/hh-nonfood-consumption.dta", replace
 
@@ -403,7 +415,7 @@ program define RCS_assign
 		quiet: merge 1:1 hhid using "`lc_sdTemp'/hh-nonfood-consumption.dta", nogen assert(master match)
 		order xfcons* xnfcons* xf* bf* xnf* bnf*, last
 		*ensure all households have core consumption
-		assert((xfcons0>0) & !missing(xfcons0))
+		if (`prob'==1) assert((xfcons0>0) & !missing(xfcons0))
 		*get per capita variables
 		ren (x*cons_t x*cons_r) (c*cons r*cons)
 		foreach v of varlist xfcons* xnfcons* cfcons cnfcons rfcons rnfcons {
@@ -800,12 +812,12 @@ end
 	
 capture: program drop RCS_run
 program define RCS_run
-	syntax using/, dirout(string) nmodules(integer) ncoref(integer) ncorenf(integer) ndiff(integer) nsim(integer) nmi(integer) lmethod(namelist) povline(real) model(string) [EGALshare] rseed(integer)
+	syntax using/, dirout(string) nmodules(integer) ncoref(integer) ncorenf(integer) ndiff(integer) nsim(integer) nmi(integer) lmethod(namelist) povline(real) model(string) [EGALshare] rseed(integer) [Prob(real 1.0)]
 
 	local dirbase = "`dirout'/d`ndiff'm`nmodules'"
 	
 	RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') `EGALshare'
-	RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed')
+	RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') prob(`prob')
 	RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model(`model') rseed(`rseed')
 	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
 	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
