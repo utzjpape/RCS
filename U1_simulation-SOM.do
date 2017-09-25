@@ -91,11 +91,11 @@ merge 1:1 hhid using "${gsdTemp}/SOM-HH-FoodItems.dta", nogen keep(match) keepus
 merge 1:1 hhid using "${gsdTemp}/SOM-HH-NonFoodItems.dta", nogen keep(match) keepusing(xnonfood*)
 *remove a few records (e.g. without consumption)
 drop if missing(hhcook_1)
-save "${gsdTemp}/SOM-HHData.dta", replace
+save "${gsdData}/SOM-HHData.dta", replace
 
 *start RCS code
 *run simulation
-local using= "${gsdTemp}/SOM-HHData.dta"
+local using= "${gsdData}/SOM-HHData.dta"
 local nmodules = `M'
 local ncoref = 33
 local ncorenf = 25
