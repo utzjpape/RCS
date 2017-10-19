@@ -120,7 +120,7 @@ local rseed = 23081980
 
 forv p=.2(.2)1 {  
 	local prob = `p'
-	local probX100 = round(`prob')*100
+	local probX100 = round(`prob'*100)
 	local dirbase = "${gsdOutput}/SOM-d`ndiff'm`M'p`probX100'"
 
 	include "${gsdDo}/fRCS.do"
