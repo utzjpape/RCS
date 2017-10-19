@@ -485,6 +485,15 @@ program define RCS_simulate
 				}
 				drop avg_x*
 			}
+			else if ("`smethod'"=="ritem") {
+				quiet: forvalues imod = 1/`M' {
+					egen avg_xfcons`imod'_pc = median(xfcons`imod'_pc)
+					replace xfcons`imod'_pc = avg_xfcons`imod'_pc if xfcons`imod'_pc>=.
+					egen avg_xnfcons`imod'_pc = median(xnfcons`imod'_pc)
+					replace xnfcons`imod'_pc = avg_xnfcons`imod'_pc if xnfcons`imod'_pc>=.
+				}
+				drop avg_x*
+			}
 			else if ("`smethod'"=="tobit") {
 				quiet: forvalues imod = 1/`M' {
 					*food
@@ -813,8 +822,9 @@ end
 capture: program drop RCS_run
 program define RCS_run
 	syntax using/, dirout(string) nmodules(integer) ncoref(integer) ncorenf(integer) ndiff(integer) nsim(integer) nmi(integer) lmethod(namelist) povline(real) model(string) [EGALshare] rseed(integer) [Prob(real 1.0)]
-
-	local dirbase = "`dirout'/d`ndiff'm`nmodules'"
+	
+	local probX100 = round(`prob'*100)
+	local dirbase = "`dirout'/d`ndiff'm`nmodules'p`prob_id'"
 	
 	RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') `EGALshare'
 	RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') prob(`prob')
