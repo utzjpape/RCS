@@ -4,17 +4,6 @@ clear all
 ma drop all
 set more off
 
-*PARAMETERS TO BE INTEGRATED
-*in 2011, $1 USD PPP was worth 10,731 Somali Shillings PPP, & general inflation in Somaliland from 2011 to 2013 was 58.4%
-*so 16,996.43 Somali Shillings PPP (2013 Somaliland prices) could buy $1 USD PPP (2011)
-*thus $1.90 USD PPP 2011 corresponds to 32,293.22 Somali Shillings PPP
-*then we convert to USD using an average exchange rate of 20,360.53 Somali Shillings per USD in 2013, that is $1.5861 USD PPP (2013 Somaliland prices)
-*to finally convert to Somaliland Shillings using an average exchange rate of 6,733.69 Somaliland Shillings per USD in 2013, which gives us a poverty line of 10,680.11 Somaliland Shillings PPP (2013 Somaliland prices) per person per day, equivalent to $1.90 USD PPP (2011) 
-gen plinePPP=10680.1112312 * .9387317
-*USE rpce * 1000 * 12 / 365
-*SHOULD REACH: urban 69 (2013) to 64 (2016) and 57 (2013) to 52 (2016)
-
-
 *parameters
 *number of modules
 local M = 4
@@ -24,49 +13,53 @@ local N = 20
 local nI = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
 local ndiff = 3
-
 *methods
 local lmethod = "med avg reg tobit MICE MImvn"
-
 *data directory
 local sData = "${gsdDataBox}/SOM-SLHS13"
 
-*deflator to divide nominal expenditures by and poverty line for urban Hargeiza
-local xdeflator = 1.094426
-local xpovline = 184.1037
-*local xfline = 112.686
+*DEFLATOR to divide nominal expenditures by and poverty line for urban Hargeiza
+*in 2011, $1 USD PPP was worth 10,731 Somali Shillings PPP, & general inflation in Somaliland from 2011 to 2013 was 58.4%
+*so 16,996.43 Somali Shillings PPP (2013 Somaliland prices) could buy $1 USD PPP (2011)
+*thus $1.90 USD PPP 2011 corresponds to 32,293.22 Somali Shillings PPP
+*then we convert to USD using an average exchange rate of 20,360.53 Somali Shillings per USD in 2013, that is $1.5861 USD PPP (2013 Somaliland prices)
+*to finally convert to Somaliland Shillings using an average exchange rate of 6,733.69 Somaliland Shillings per USD in 2013, which gives us a poverty line of 10,680.11 Somaliland Shillings PPP (2013 Somaliland prices) per person per day, equivalent to $1.90 USD PPP (2011) 
+local xpovline = 10680.1112312 * .9387317
 
 include "${gsdDo}/fRCS.do"
+
 *CREATE MODULES 
 *for validation of the method, missing data is assumed to be missing
 *as the consumption aggregate implicitly assumes.
 *food consumption
 use "`sData'/food_consumption_clean.dta", clear
-drop if strata ~= 1
+merge m:1 hhid using "`sData'/wfilez.dta", nogen keep(match) assert(match) keepusing(paasche)
+replace xfood = xfood / paasche if xfood<.
 keep hhid foodid xfood
-replace xfood = xfood / `xdeflator' if xfood<.
 fItems2RCS, hhid(hhid) itemid(foodid) value(xfood)
-save "${gsdTemp}/SOM-HH-FoodItems.dta", replace
+save "${gsdTemp}/SLD-HH-FoodItems.dta", replace
 *non food consumption
 use "`sData'/non_food_clean.dta", clear
+merge m:1 hhid using "`sData'/wfilez.dta", nogen keep(match) assert(match) keepusing(paasche)
+replace xnonfood = xnonfood / paasche if xnonfood<.
 keep hhid nonfoodid xnonfood
-replace xnonfood = xnonfood / `xdeflator' if xnonfood<.
 fItems2RCS, hhid(hhid) itemid(nonfoodid) value(xnonfood)
-save "${gsdTemp}/SOM-HH-NonFoodItems.dta", replace
+save "${gsdTemp}/SLD-HH-NonFoodItems.dta", replace
 
 *get confidence interval for poverty
+*USE rpce * 1000 * 12 / 365
+*IPL FGT0 should be rural 69 (2013) to 64 (2016) and urban 57 (2013) to 52 (2016)
 use "`sData'/wfilez.dta", clear
-drop if strata ~= 1
 svyset cluster [pweight=weight]
-gen poor = rpce < zupper
-mean poor
+gen poor = rpce * 1000 * 12 / 365 < `xpovline'
+mean poor [pweight=weight*hsize], over(urban)
 *graph food share
 gen x = rfood_pc + rnonfood_pc
 gen ratio = rfood_pc / x
 egen r = rank(x)
 sort x
-twoway (scatter ratio r) (qfit ratio r), title("Hergeiza")
-graph export "${gsdOutput}\Hergeiza_fshare.png", as(png) replace
+twoway (scatter ratio r) (qfit ratio r), title("Somaliland")
+graph export "${gsdOutput}\SLD_fshare.png", as(png) replace
 
 *get household characteristics
 use "`sData'/data_i_proc_public.dta", clear
@@ -90,23 +83,33 @@ recode hhsleep (99=2) (.=2)
 recode hhmaterial (99=5) (.=5) (4=5)
 recode hhmode (5=4) (99=4) (.=4) (3=4)
 recode hhfood (99=2) (.=4)
-drop if strata ~= 1
 *add variables
 gen pchild = nchild / hhsize
 gen psenior = nsenior / hhsize
 gen pwork = nwork / hhsize
 gen bwork = nwork>0
 *add durables and food and non-food
-merge 1:1 hhid using "`sData'/wfilez.dta", nogen keep(match) keepusing(xdurables_pc)
-merge 1:1 hhid using "${gsdTemp}/SOM-HH-FoodItems.dta", nogen keep(match) keepusing(xfood*)
-merge 1:1 hhid using "${gsdTemp}/SOM-HH-NonFoodItems.dta", nogen keep(match) keepusing(xnonfood*)
+merge 1:1 hhid using "`sData'/wfilez.dta", nogen keep(match) keepusing(rdurables_pc urban)
+ren rdurables_pc xdurables_pc
+merge 1:1 hhid using "${gsdTemp}/SLD-HH-FoodItems.dta", nogen keep(match) keepusing(xfood*)
+merge 1:1 hhid using "${gsdTemp}/SLD-HH-NonFoodItems.dta", nogen keep(match) keepusing(xnonfood*)
 *remove a few records (e.g. without consumption)
 drop if missing(hhcook_1)
-save "${gsdData}/SOM-HHData.dta", replace
+save "${gsdData}/SLD-HHData.dta", replace
+
+*check whether we can reconstruct the consumption aggregate at the item level
+use "${gsdData}/SLD-HHData.dta", clear
+merge 1:1 hhid using "`sData'/wfilez.dta", nogen keep(match) assert(match using) keepusing(rpce pce rfood rfood_pc rnonfood rnonfood_pc)
+egen ctf = rowtotal(xfood*)
+egen ctnf = rowtotal(xnonfood*)
+gen ct_pc = (ctf+ctnf) / hhsize + xdurables_pc
+assert (round(ct_pc-rpce)==0)
+gen poor = rpce * 1000 * 12 / 365 < `xpovline'
+mean poor [pweight=weight*hhsize], over(urban)
 
 *start RCS code
 *run simulation
-local using= "${gsdData}/SOM-HHData.dta"
+local using= "${gsdData}/SLD-HHData.dta"
 local nmodules = `M'
 local ncoref = 33
 local ncorenf = 25
@@ -115,8 +118,8 @@ local nsim =`N'
 local nmi = `nI'
 local povline = `xpovline'
 local lmethod = "`lmethod'"
-local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood"
-local dirbase = "${gsdOutput}/SOM-d`ndiff'm`M'"
+local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood urban"
+local dirbase = "${gsdOutput}/SLD-d`ndiff'm`M'"
 local rseed = 23081980
 local prob = 1
 
