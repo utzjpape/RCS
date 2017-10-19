@@ -486,13 +486,8 @@ program define RCS_simulate
 				drop avg_x*
 			}
 			else if ("`smethod'"=="ritem") {
-				quiet: forvalues imod = 1/`M' {
-					egen avg_xfcons`imod'_pc = median(xfcons`imod'_pc)
-					replace xfcons`imod'_pc = avg_xfcons`imod'_pc if xfcons`imod'_pc>=.
-					egen avg_xnfcons`imod'_pc = median(xnfcons`imod'_pc)
-					replace xnfcons`imod'_pc = avg_xnfcons`imod'_pc if xnfcons`imod'_pc>=.
-				}
-				drop avg_x*
+					di as error "Method ritem not known."
+					error 1
 			}
 			else if ("`smethod'"=="tobit") {
 				quiet: forvalues imod = 1/`M' {
