@@ -32,6 +32,13 @@ else if (inlist("${suser}","wb502620","WB502620")) {
 	*Box directory where the Data folder can be located
 	local swdBox = "C:\Users\wb502620\Box Sync\HCE 2011"
 }
+*Simon
+else if (inlist("${suser}","wb495217","WB495217")) {	
+	*Local directory of your checked out copy of the code
+	local swdLocal = "C:\Users\WB495217\OneDrive - WBG\SL WBG Files\FY18 SDN\Poverty Assessment\RCS"
+	*Box directory where the Data folder can be located
+	local swdBox = "C:\Users\WB495217\WBG\Utz Johann Pape - Sh-RCS\DataBox"
+}
 else {
 	di as error "Configure work environment in 00-init.do before running the code."
 	error 1
