@@ -19,14 +19,14 @@ gen plinePPP=10680.1112312 * .9387317
 *number of modules
 local M = 1
 *number of simulations
-local N = 5
+local N = 20
 *number of imputations 
 local nI = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
 local ndiff = 3
 
 *methods
-local lmethod = "avg"
+local lmethod = "avg ritem"
 
 *data directory
 local sData = "${gsdDataBox}/SOM-SLHS13"
@@ -118,7 +118,7 @@ local lmethod = "`lmethod'"
 local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood"
 local rseed = 23081980
 
-forv p=.2(.2)1 {  
+forv p=.6(.2)1 {  
 	local prob = `p'
 	local probX100 = round(`prob'*100)
 	local dirbase = "${gsdOutput}/SOM-d`ndiff'm`M'p`probX100'"
