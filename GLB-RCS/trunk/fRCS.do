@@ -414,8 +414,6 @@ program define RCS_assign
 		quiet: merge 1:1 hhid using "`lc_sdTemp'/hh-food-consumption.dta", nogen assert(master match)
 		quiet: merge 1:1 hhid using "`lc_sdTemp'/hh-nonfood-consumption.dta", nogen assert(master match)
 		order xfcons* xnfcons* xf* bf* xnf* bnf*, last
-		*ensure all households have core consumption
-		if (`prob'==1) assert((xfcons0>0) & !missing(xfcons0))
 		*get per capita variables
 		ren (x*cons_t x*cons_r) (c*cons r*cons)
 		foreach v of varlist xfcons* xnfcons* cfcons cnfcons rfcons rnfcons {
