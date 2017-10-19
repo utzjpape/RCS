@@ -471,7 +471,7 @@ program define RCS_simulate
 				quiet: forvalues imod = 1/`M' {
 					egen avg_xfcons`imod'_pc = mean(xfcons`imod'_pc)
 					replace xfcons`imod'_pc = avg_xfcons`imod'_pc if xfcons`imod'_pc>=.
-					egen avg_xnfcons`imod'_pc = mean(xfcons`imod'_pc)
+					egen avg_xnfcons`imod'_pc = mean(xnfcons`imod'_pc)
 					replace xnfcons`imod'_pc = avg_xnfcons`imod'_pc if xnfcons`imod'_pc>=.
 				}
 				drop avg_x*
@@ -480,7 +480,7 @@ program define RCS_simulate
 				quiet: forvalues imod = 1/`M' {
 					egen avg_xfcons`imod'_pc = median(xfcons`imod'_pc)
 					replace xfcons`imod'_pc = avg_xfcons`imod'_pc if xfcons`imod'_pc>=.
-					egen avg_xnfcons`imod'_pc = median(xfcons`imod'_pc)
+					egen avg_xnfcons`imod'_pc = median(xnfcons`imod'_pc)
 					replace xnfcons`imod'_pc = avg_xnfcons`imod'_pc if xnfcons`imod'_pc>=.
 				}
 				drop avg_x*

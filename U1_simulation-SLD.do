@@ -1,4 +1,4 @@
-*SIMULATE FOR SOMALIA
+*SIMULATE FOR SOMALILAND
 
 clear all
 ma drop all

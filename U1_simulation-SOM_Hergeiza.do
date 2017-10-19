@@ -1,19 +1,8 @@
-*SIMULATE FOR SOMALIA
+*SIMULATE PARTIAL SURVEYS FOR HERGAISA
 
 clear all
 ma drop all
 set more off
-
-*PARAMETERS TO BE INTEGRATED
-*in 2011, $1 USD PPP was worth 10,731 Somali Shillings PPP, & general inflation in Somaliland from 2011 to 2013 was 58.4%
-*so 16,996.43 Somali Shillings PPP (2013 Somaliland prices) could buy $1 USD PPP (2011)
-*thus $1.90 USD PPP 2011 corresponds to 32,293.22 Somali Shillings PPP
-*then we convert to USD using an average exchange rate of 20,360.53 Somali Shillings per USD in 2013, that is $1.5861 USD PPP (2013 Somaliland prices)
-*to finally convert to Somaliland Shillings using an average exchange rate of 6,733.69 Somaliland Shillings per USD in 2013, which gives us a poverty line of 10,680.11 Somaliland Shillings PPP (2013 Somaliland prices) per person per day, equivalent to $1.90 USD PPP (2011) 
-gen plinePPP=10680.1112312 * .9387317
-*USE rpce * 1000 * 12 / 365
-*SHOULD REACH: urban 69 (2013) to 64 (2016) and 57 (2013) to 52 (2016)
-
 
 *parameters
 *number of modules
