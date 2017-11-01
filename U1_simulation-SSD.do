@@ -101,6 +101,8 @@ label values hhwaste lwaste
 *add durables and food and non-food
 merge 1:1 hhid using "${gsdTemp}/SSD-HH-FoodItems.dta", nogen keep(match) keepusing(xfood*)
 merge 1:1 hhid using "${gsdTemp}/SSD-HH-NonFoodItems.dta", nogen keep(match) keepusing(xnonfood*)
+gen pchild = nchild / hhsize
+gen psenior = nsenior / hhsize
 save "${gsdData}/SSD-HHData.dta", replace
 
 *start RCS code
@@ -116,14 +118,16 @@ local nmi = `nI'
 local povline = `xpovline'
 local lmethod = "med avg reg tobit MICE MImvn"
 local model = "hhsize pchild psenior i.hhsex i.hhwater i.hhcook hhsleep i.hhhouse i.hhtoilet i.hhwaste"
+local rseed = 23081980
+local prob = 1
 
 include "${gsdDo}/fRCS.do"
 *RCS_run using "`lc_sdTemp'/HHData.dta", dirbase("${l_sdOut}") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'")
 RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
-RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim')
-RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'")
-RCS_collate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
-RCS_analyze using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') lmethod("`lmethod'") povline(`povline')
+RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
+RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
+RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
+RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
 
 *subrun
 include "${gsdDo}/fRCS.do"
