@@ -8,6 +8,13 @@ set more off
 *data directory
 local sData = "${gsdDataBox}/KEN-KIHBS2005"
 
+*PPP (priv cons) from WDI in 2011: 35.42 LCU per int $
+*CPI (2011): 114.022 (WDI)
+*CPI (2005): 55.527 (WDI)
+local xpovline = 1.90 * 35.42 / 114.022 * 55.527
+*Poverty line from povcalnet
+local xpovline = 1.90 * 35.4296
+
 include "${gsdDo}/fRCS.do"
 
 *CREATE MODULES 
@@ -16,36 +23,29 @@ include "${gsdDo}/fRCS.do"
 *food consumption
 use "`sData'/section I Weekly Expenditure.dta", clear
 *link deflator
-merge m:1 id_clu id_hh using "`sData'/consumption_aggregated_data.dta", keep(master match) keepusing(fpindex)
+merge m:1 id_clu id_hh using "`sData'/consumption_aggregated_data.dta", keep(master match) keepusing(fpindex) nogen
 *prepare id
 gen hhid = id_clust * 10000 + id_hh
 ren i02 foodid
 drop if foodid>2000
-egen xfood = rowtotal(i03k i04k i05k i05ak i06k i07k)
-keep hhid foodid xfood fpindex
-collapse (sum) xfood, by(hhid foodid fpindex)
-replace xfood = xfood / fpindex if xfood<.
+egen xfood = rowtotal(i04k i05k i05ak i06k i07k)
+replace xfood = xfood / 7 / fpindex if xfood<.
+keep hhid foodid xfood
+collapse (sum) xfood, by(hhid foodid)
 fItems2RCS, hhid(hhid) itemid(foodid) value(xfood)
 save "${gsdTemp}/KEN-HH-FoodItems.dta", replace
 *non food consumption
 use "`sData'/Section JKL Regular Non Food Items.dta", clear
 *link deflator
-merge m:1 id_clu id_hh using "`sData'/consumption_aggregated_data.dta", keep(master match) keepusing(fpindex)
+merge m:1 id_clu id_hh using "`sData'/consumption_aggregated_data.dta", keep(master match) keepusing(fpindex) nogen
 *prepare id
 gen hhid = id_clust * 10000 + id_hh
 ren j02 nonfoodid
-gen xnonfood = j03k + j04k
-keep hhid nonfoodid xnonfood fpindex
-collapse (sum) xnonfood, by(hhid nonfoodid fpindex)
-replace xnonfood = xnonfood / fpindex if xnonfood<.
+gen xnonfood = (j03k + j04k) * 12 / 365.25 / fpindex
+keep hhid nonfoodid xnonfood
+collapse (sum) xnonfood, by(hhid nonfoodid)
 fItems2RCS, hhid(hhid) itemid(nonfoodid) value(xnonfood)
 save "${gsdTemp}/KEN-HH-NonFoodItems.dta", replace
-
-*get confidence interval for poverty
-use "`sData'/consumption_aggregated_data.dta", clear
-svyset id_clu [pweight=wta_pop]
-gen poor = y2_i < z2_i 
-svy: mean poor
 
 *get household characteristics
 use "`sData'/Section_B_Household_member_Information.dta", clear
@@ -63,39 +63,48 @@ ren weights weight
 gen hhid = id_clust * 10000 + id_hh
 recode hhhouse (99=7) (.=7)
 recode hhtoilet (99=2) (.=2)
+recode hhtenure (1/2=1) (3/6=2)
+recode hhhouse (1/3=1) (4/7=2)
+recode hhcook (1/2=1) (3/8=2)
+recode hhrooms (9/30=8)
 *add variables
 gen pchild = nchild / hhsize
 gen psenior = nsenior / hhsize
 *add durables
-merge 1:1 id_clu id_hh using "`sData'/consumption_aggregated_data.dta", nogen keep(match) keepusing(nfdusevl fpindex)
-*remainder of consumption aggregate
-gen xdurables = nfdusevl / fpindex
+merge 1:1 id_clu id_hh using "`sData'/consumption_aggregated_data.dta", nogen keep(match) keepusing(nfdusevl nfdremcs nfdremfd nfdremot fpindex rururb)
+ren rururb strata
+*remainder of consumption aggregate, incl transfer and rent imputation
+gen xdurables = (nfdusevl+nfdremcs+nfdremfd+nfdremot) / fpindex * 12 / 365.25
+gen xdurables_pc = xdurables / hhsize
 drop nfdusevl fpindex
 *add food and non-food
 merge 1:1 hhid using "${gsdTemp}/KEN-HH-FoodItems.dta", nogen keep(match) keepusing(xfood*)
 merge 1:1 hhid using "${gsdTemp}/KEN-HH-NonFoodItems.dta", nogen keep(match) keepusing(xnonfood*)
 ren id_clu cluster
+*delete missing consumption
+egen ctf = rowtotal(xfood*)
+egen ctnf = rowtotal(xnonfood*)
+drop if missing(ctf) | missing(ctnf) | (ctf==0)
+drop ctf ctnf
 save "${gsdData}/KEN-HHData.dta", replace
 
+*start RCS code
 *check whether we can reconstruct the consumption aggregate at the item level
 use "${gsdData}/KEN-HHData.dta", clear
 ren cluster id_clust
-merge 1:1 id_clust id_hh using "`sData'/consumption_aggregated_data.dta", nogen keep(match) assert(match using) keepusing(y2_i)
+merge 1:1 id_clust id_hh using "`sData'/consumption_aggregated_data.dta", nogen keep(match) assert(match using) keepusing(y_i y2_i ctry_adq)
 egen ctf = rowtotal(xfood*)
 egen ctnf = rowtotal(xnonfood*)
-gen ct_pc = (ctf+ctnf) / hhsize + xdurables_pc
-assert (round(ct_pc-rpce)==0)
-gen poor = rpce < `xpovline'
+gen poor = (ctf+ctnf+xdurables)/hhsize < `xpovline'
 mean poor [pweight=weight*hhsize]
-mean poor [pweight=weight*hhsize], over(urban)
-
-*start RCS code
-*run simulation
+mean poor [pweight=weight*hhsize], over(strata)
+local model = "hhsize pchild psenior i.hhsex i.hhtoilet i.hhtenure i.hhhouse i.hhcook hhrooms i.strata"
+reg y2_i `model'
 *number of modules
 local nmodules = 4
-*number of simulations
+*number of simulations (should be 20)
 local nsim = 20
-*number of imputations 
+*number of imputations (should be 50)
 local nmi = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
 local ndiff = 3
@@ -109,18 +118,14 @@ local ncorenf = 25
 local ndiff=`ndiff'
 local povline = `xpovline'
 local lmethod = "`lmethod'"
-local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood"
+local rseed = 23081980
+local prob = 1
 
+*run simulation
 include "${gsdDo}/fRCS.do"
 *RCS_run using "`lc_sdTemp'/HHData.dta", dirbase("${l_sdOut}") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'") egalshare
-RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') egalshare
-RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim')
-RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'")
-RCS_collate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
-RCS_analyze using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') lmethod("`lmethod'") povline(`povline')
-
-*subrun
-include "${gsdDo}/fRCS.do"
-RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("tobit") model("`model'")
-RCS_collate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("tobit")
-RCS_analyze using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') lmethod("`lmethod'") povline(`povline')
+RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
+RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
+RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
+RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
+RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
