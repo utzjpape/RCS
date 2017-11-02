@@ -5,22 +5,23 @@ ma drop all
 set more off
 
 *parameters
-*number of modules
-local M = 4
-*number of simulations
-local N = 10
-*number of imputations 
-local nI = 20
-*number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
-local ndiff = 3
 *data directory
 local sData = "${gsdDataBox}/SSD-NBHS2009"
 
-*deflator to divide nominal expenditures by and poverty line for urban Hargeiza
-local xdeflator = 1.094426
-local xpovline = 184.1037
+* CPI inflation from June 2008 (data collection) to June 2011 is 100/69.12 (NBS)
+* Thus, the 2011 (PPP) poverty line of 1.9/d translates into 1.9/d / 1.543373 = 1.23 USD PPP (2011)
+* Using the ER of 2.95 in 2011, we receive 3.63 SSP/d in 2011 terms
+* In 2008 terms, this is 3.63/100*69.12 = 2.51 SSP/d
+* For a month, this is 2.51 * 365.25 / 12 = 76.4 SSP/m
+local xpovline = 2.51 * 365.25 / 12 
 
 include "${gsdDo}/fRCS.do"
+
+*get laspeyres
+use "`sData'/NBHS_IND.dta", clear
+keep hhid laspeyres
+duplicates drop
+save "${gsdTemp}/SSD-Deflator.dta", replace
 
 *CREATE MODULES 
 *for validation of the method, missing data is assumed to be zero
@@ -28,7 +29,9 @@ include "${gsdDo}/fRCS.do"
 *food consumption
 use "`sData'/NBHS_FOOD.dta", clear
 ren (item value) (foodid xfood)
-include "${gsdDo}/SSD-labels.do"
+merge m:1 hhid using "${gsdTemp}/SSD-Deflator.dta", assert(match) keepusing(laspeyres)
+replace xfood = xfood /7 * 365.25 / 12 / laspeyres
+quiet: include "${gsdDo}/SSD-labels.do"
 label values foodid lfoodid
 keep hhid foodid xfood
 fItems2RCS, hhid(hhid) itemid(foodid) value(xfood)
@@ -37,7 +40,9 @@ save "${gsdTemp}/SSD-HH-FoodItems.dta", replace
 use "`sData'/NBHS_NONFOOD.dta", clear
 ren (item q3) (nonfoodid xnonfood)
 replace nonfoodid = 83003 if nonfoodid==830031
-include "${gsdDo}/SSD-labels.do"
+merge m:1 hhid using "${gsdTemp}/SSD-Deflator.dta", assert(match) keepusing(laspeyres)
+replace xnonfood = xnonfood / laspeyres
+quiet: include "${gsdDo}/SSD-labels.do"
 label values nonfoodid lnonfoodid
 *module=5 implies 12m recall; module=4 is a 30d recall
 replace xnonfood = xnonfood / 12 if module==5
@@ -105,22 +110,42 @@ gen pchild = nchild / hhsize
 gen psenior = nsenior / hhsize
 save "${gsdData}/SSD-HHData.dta", replace
 
-*start RCS code
-*run simulation
+*START RCS code
+*number of modules
+local nmodules = 4
+*number of simulations
+local nsim = 20
+*number of imputations 
+local nmi = 50
+*number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
+local ndiff = 3
 local using= "${gsdData}/SSD-HHData.dta"
-local dirbase = "${gsdOutput}/SSD-d`ndiff'm`M'"
-local nmodules = `M'
+local dirbase = "${gsdOutput}/SSD-d`ndiff'm`nmodules'"
 local ncoref = 33
 local ncorenf = 25
 local ndiff=`ndiff'
-local nsim = `N'
-local nmi = `nI'
 local povline = `xpovline'
 local lmethod = "med avg reg tobit MICE MImvn"
-local model = "hhsize pchild psenior i.hhsex i.hhwater i.hhcook hhsleep i.hhhouse i.hhtoilet i.hhwaste"
 local rseed = 23081980
 local prob = 1
+local model = "hhsize pchild psenior i.hhsex i.hhwater i.hhcook hhsleep i.hhhouse i.hhtoilet i.hhwaste i.strata"
 
+*build consumption model
+use "${gsdData}/SSD-HHData.dta", clear
+merge 1:1 hhid using "`sData'/NBHS_HH.dta", nogen keep(match) assert(match using) keepusing(pc*)
+egen ctf = rowtotal(xfood*)
+replace ctf = ctf / hhsize
+egen ctnf = rowtotal(xnonfood*)
+replace ctnf = ctnf / hhsize
+gen ct_pc = ctf+ctnf + xdurables_pc
+*NOTE THAT WE CANNOT REPRODUCE ORIGINAL CONSUMPTION AGGREGATE
+*assert (round(ct_pc-pcexpm)==0)
+gen poor = ct_pc < `xpovline'
+mean poor [pweight=weight*hhsize]
+mean poor [pweight=weight*hhsize], over(strata)
+reg ct_pc `model'
+
+*run simulation
 include "${gsdDo}/fRCS.do"
 *RCS_run using "`lc_sdTemp'/HHData.dta", dirbase("${l_sdOut}") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'")
 RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
@@ -128,23 +153,3 @@ RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim
 RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
 RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
 RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
-
-*subrun
-include "${gsdDo}/fRCS.do"
-RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("MImvn2") model("`model'")
-RCS_collate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') lmethod("MImvn2")
-RCS_analyze using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ndiff(`ndiff') lmethod("`lmethod'") povline(`povline')
-
-
-
-
-
-*check error relative to consumption -> lower incomes have larger positive error (over-estimation)
-*while higher incomes are slightly under-estimated
-use "C:\Users\wb390290\Box Sync\Home\Research\RCS\Out\d3m4\Temp\simd_MImvn2_imp.dta", clear
-collapse (mean) est ref, by(simulation hhid cluster weight)
-gen x = (est - ref) / ref * 100
-collapse (mean) x ref, by(hhid cluster weight)
-egen r = rank(ref)
-graph twoway (scatter x r) (lfit x r)
-
