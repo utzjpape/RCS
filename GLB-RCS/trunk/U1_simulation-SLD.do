@@ -5,16 +5,6 @@ ma drop all
 set more off
 
 *parameters
-*number of modules
-local M = 4
-*number of simulations
-local N = 20
-*number of imputations 
-local nI = 50
-*number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
-local ndiff = 3
-*methods
-local lmethod = "med avg reg tobit MICE MImvn"
 *data directory
 local sData = "${gsdDataBox}/SOM-SLHS13"
 
@@ -110,17 +100,24 @@ mean poor [pweight=weight*hhsize], over(urban)
 
 *start RCS code
 *run simulation
+*number of modules
+local nmodules = 4
+*number of simulations
+local nsim = 20
+*number of imputations 
+local nmi = 50
+*number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
+local ndiff = 3
+*methods
+local lmethod = "med avg reg tobit MICE MImvn"
 local using= "${gsdData}/SLD-HHData.dta"
-local nmodules = `M'
 local ncoref = 33
 local ncorenf = 25
 local ndiff=`ndiff'
-local nsim =`N'
-local nmi = `nI'
 local povline = `xpovline' 
 local lmethod = "`lmethod'"
 local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood urban"
-local dirbase = "${gsdOutput}/SLD-d`ndiff'm`M'"
+local dirbase = "${gsdOutput}/SLD-d`ndiff'm`nmodules'"
 local rseed = 23081980
 local prob = 1
 
