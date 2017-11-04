@@ -63,10 +63,11 @@ ren weights weight
 gen hhid = id_clust * 10000 + id_hh
 recode hhhouse (99=7) (.=7)
 recode hhtoilet (99=2) (.=2)
-recode hhtenure (1/2=1) (3/6=2)
+recode hhtenure (1/2=1) (3/6=2) (.=2)
 recode hhhouse (1/3=1) (4/7=2)
-recode hhcook (1/2=1) (3/8=2)
-recode hhrooms (9/30=8)
+recode hhcook (1/2=1) (3/8=2) (.=2)
+*assign average number of rooms (2) to missing
+recode hhrooms (9/30=8) (.=2)
 *add variables
 gen pchild = nchild / hhsize
 gen psenior = nsenior / hhsize

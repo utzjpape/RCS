@@ -406,6 +406,7 @@ program define RCS_assign
 		egen xt_mods = rowtotal(xnfcons?)
 		if (`prob'==1) assert round(xt_items-xt_mods,.1)==0
 		drop xt_*
+		quiet: compress
 		save "`lc_sdTemp'/hh-nonfood-consumption.dta", replace
 
 		*merge food and non-food
@@ -426,6 +427,7 @@ program define RCS_assign
 		*prepare check variables
 		quiet: gen ccons_pc = cfcons_pc + cnfcons_pc + xdurables_pc
 		quiet: gen rcons_pc = rfcons_pc + rnfcons_pc + xdurables_pc
+		quiet: compress
 		save "`lc_sdTemp'/mi_`isim'.dta", replace
 	}
 end
@@ -560,6 +562,8 @@ program define RCS_simulate
 			*estimate total consumption
 			*quiet: mi passive: replace xfcons_pc = xfcons0_pc + xfcons1_pc + xfcons2_pc + xfcons3_pc + xfcons4_pc
 			*quiet: mi passive: replace xcons_pc = xfcons_pc + xnfcons0_pc + xnfcons1_pc + xnfcons2_pc + xnfcons3_pc + xnfcons4_pc + 
+			drop bnfitem* bfitem*
+			quiet: compress
 			save "`lc_sdTemp'/sim_`smethod'_`isim'.dta", replace
 		}
 	}
