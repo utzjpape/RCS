@@ -125,7 +125,7 @@ local povline = `xpovline'
 local lmethod = "`lmethod'"
 local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood urban"
 local dirbase = "${gsdOutput}/SLD`bH'-d`ndiff'm`nmodules'"
-local rseed = 23081980
+local rseed = 9107655
 local prob = 1
 
 include "${gsdDo}/fRCS.do"
