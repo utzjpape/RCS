@@ -493,18 +493,18 @@ program define RCS_simulate
 				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
 				* drop value label - why does it appear in the first place?
 				capture label drop J00
-				* medians for subsets with positive consumption
-				egen aux_median_xfitem = median(xfitem) if xfitem>0, by(item)
-				egen aux_median_xnfitem = median(xnfitem) if xnfitem>0, by(item)
-				egen median_xfitem = median(aux_median_xfitem), by(item)
-				egen median_xnfitem = median(aux_median_xnfitem), by(item)
+				* avg for subsets with positive consumption
+				egen aux_avg_xfitem = mean(xfitem) if xfitem>0, by(item)
+				egen aux_avg_xnfitem = mean(xnfitem) if xnfitem>0, by(item)
+				egen avg_xfitem = mean(aux_avg_xfitem), by(item)
+				egen avg_xnfitem = mean(aux_avg_xnfitem), by(item)
 				* we know x's are missing if b's are zero:
 				replace xfitem = 0 if bfitem == 0
 				replace xnfitem = 0 if bnfitem == 0
 				* impute median if b's are unity but x's are missing:
-				replace xfitem = median_xfitem if bfitem == 1 & xfitem==.y
-				replace xnfitem = median_xnfitem if bnfitem == 1 & xnfitem==.y
-				drop median_* aux_*
+				replace xfitem = avg_xfitem if bfitem == 1 & xfitem==.y
+				replace xnfitem = avg_xnfitem if bnfitem == 1 & xnfitem==.y
+				drop avg_* aux_*
 				* aggregate
 				egen aux_xfcons1 = total(xfitem), by(hhid)
 				egen aux_xnfcons1 = total(xnfitem), by(hhid)
