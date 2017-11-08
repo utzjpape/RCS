@@ -508,7 +508,7 @@ program define RCS_simulate
 				* aggregate
 				egen aux_xfcons1 = total(xfitem), by(hhid)
 				egen aux_xnfcons1 = total(xnfitem), by(hhid)
-
+				* reshape to wide format
 				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
 				replace xfcons1_pc = aux_xfcons1/hhsize
 				replace xnfcons1_pc = aux_xnfcons1/hhsize
