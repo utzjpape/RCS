@@ -8,7 +8,7 @@ set more off
 *number of modules
 local M = 4
 *number of simulations
-local N = 20
+local N = 18
 *number of imputations 
 local nI = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)

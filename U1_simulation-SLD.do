@@ -8,6 +8,9 @@ set more off
 *data directory
 local sData = "${gsdDataBox}/SOM-SLHS13"
 
+*leave blank for Somaliland and add suffix for Hergeize like _Hergeiza
+local bH = "_Hergeiza"
+
 *DEFLATOR to divide nominal expenditures by and poverty line for urban Hargeiza
 *in 2011, $1 USD PPP was worth 10,731 Somali Shillings PPP, & general inflation in Somaliland from 2011 to 2013 was 58.4%
 *so 16,996.43 Somali Shillings PPP (2013 Somaliland prices) could buy $1 USD PPP (2011)
@@ -83,12 +86,16 @@ merge 1:1 hhid using "`sData'/wfilez.dta", nogen keep(match) keepusing(rdurables
 ren rdurables_pc xdurables_pc
 merge 1:1 hhid using "${gsdTemp}/SLD-HH-FoodItems.dta", nogen keep(match) keepusing(xfood*)
 merge 1:1 hhid using "${gsdTemp}/SLD-HH-NonFoodItems.dta", nogen keep(match) keepusing(xnonfood*)
+*check if Hergeiza only
+if ("`bH'"!="") {
+	drop if strata !=1
+}
 *remove a few records (e.g. without consumption)
 drop if missing(hhcook_1)
-save "${gsdData}/SLD-HHData.dta", replace
+save "${gsdData}/SLD`bH'-HHData.dta", replace
 
 *check whether we can reconstruct the consumption aggregate at the item level
-use "${gsdData}/SLD-HHData.dta", clear
+use "${gsdData}/SLD`bH'-HHData.dta", clear
 merge 1:1 hhid using "`sData'/wfilez.dta", nogen keep(match) assert(match using) keepusing(rpce pce rfood rfood_pc rnonfood rnonfood_pc)
 egen ctf = rowtotal(xfood*)
 egen ctnf = rowtotal(xnonfood*)
@@ -110,14 +117,14 @@ local nmi = 50
 local ndiff = 3
 *methods
 local lmethod = "med avg reg tobit MICE MImvn"
-local using= "${gsdData}/SLD-HHData.dta"
+local using= "${gsdData}/SLD`bH'-HHData.dta"
 local ncoref = 33
 local ncorenf = 25
 local ndiff=`ndiff'
 local povline = `xpovline' 
 local lmethod = "`lmethod'"
 local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood urban"
-local dirbase = "${gsdOutput}/SLD-d`ndiff'm`nmodules'"
+local dirbase = "${gsdOutput}/SLD`bH'-d`ndiff'm`nmodules'"
 local rseed = 23081980
 local prob = 1
 
