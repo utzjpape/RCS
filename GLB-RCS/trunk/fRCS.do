@@ -486,8 +486,34 @@ program define RCS_simulate
 				drop avg_x*
 			}
 			else if ("`smethod'"=="ritem") {
-					di as error "Method ritem not known."
-					error 1
+				* extract variable names (reshaping and re-reshaping below results in extra variables)
+				qui ds
+				local all_vars `r(varlist)'
+				* reshape to long format
+				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				* drop value label - why does it appear in the first place?
+				capture label drop J00
+				* medians for subsets with positive consumption
+				egen aux_median_xfitem = median(xfitem) if xfitem>0, by(item)
+				egen aux_median_xnfitem = median(xnfitem) if xnfitem>0, by(item)
+				egen median_xfitem = median(aux_median_xfitem), by(item)
+				egen median_xnfitem = median(aux_median_xnfitem), by(item)
+				* we know x's are missing if b's are zero:
+				replace xfitem = 0 if bfitem == 0
+				replace xnfitem = 0 if bnfitem == 0
+				* impute median if b's are unity but x's are missing:
+				replace xfitem = median_xfitem if bfitem == 1 & xfitem==.y
+				replace xnfitem = median_xnfitem if bnfitem == 1 & xnfitem==.y
+				drop median_* aux_*
+				* aggregate
+				egen aux_xfcons1 = total(xfitem), by(hhid)
+				egen aux_xnfcons1 = total(xnfitem), by(hhid)
+
+				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				replace xfcons1_pc = aux_xfcons1/hhsize
+				replace xnfcons1_pc = aux_xnfcons1/hhsize
+				* keep only initial variable list
+				keep `all_vars'
 			}
 			else if ("`smethod'"=="tobit") {
 				quiet: forvalues imod = 1/`M' {
@@ -613,7 +639,7 @@ program define RCS_collate
 				file write fh _n
 			}
 			*estimations
-			if inlist("`smethod'","med","avg","reg","tobit") {
+			if inlist("`smethod'","med","avg","ritem","reg","tobit") {
 				file write fh "`isim'" _tab "1"
 				foreach id of local xhh {
 					quiet: summ xcons_pc if hhid==`id'
