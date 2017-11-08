@@ -327,6 +327,8 @@ program define RCS_assign
 		quiet: gen xfred = xfood if itemred
 		quiet: bysort hhid: egen xfcons_r = sum(xfred)
 		drop xfred itemred
+		*get total food consumption
+		quiet: bysort hhid: egen xfcons_t = sum(xfood)
 		*remove consumption that is not assigned
 		quiet: replace xfood = .z if (itemmod>0) & (itemmod!=hhmod)
 		*add binary yes/no indicator whether food is consumed
@@ -336,8 +338,6 @@ program define RCS_assign
 		quiet: gen r = runiform() if ~missing(bfitem)
 		quiet: replace xfood = .y if ~missing(r) & (r>`prob')
 		drop r
-		*get total food consumption
-		quiet: bysort hhid: egen xfcons_t = sum(xfood)
 		*create module consumption
 		forvalues kmod = 0/`M' {
 			quiet: bysort hhid itemmod: egen cxfood`kmod' = total(xfood) if (itemmod==`kmod') & ((`kmod'==0) | (hhmod==`kmod'))
@@ -373,6 +373,8 @@ program define RCS_assign
 		quiet: gen xnfred = xnonfood if itemred
 		quiet: bysort hhid: egen xnfcons_r = sum(xnfred)
 		drop xnfred itemred
+		*get total consumption
+		quiet: bysort hhid: egen xnfcons_t = sum(xnonfood)
 		*remove consumption that is not assigned
 		quiet: replace xnonfood = .z if (itemmod>0) & (itemmod!=hhmod)
 		*add binary yes/no indicator whether food is consumed (for assigned modules)
@@ -382,8 +384,6 @@ program define RCS_assign
 		quiet: gen r = runiform() if ~missing(bnfitem)
 		quiet: replace xnonfood = .y if ~missing(r) & (r>`prob')
 		drop r
-		*get total consumption
-		quiet: bysort hhid: egen xnfcons_t = sum(xnonfood)
 		*create module consumption
 		forvalues kmod = 0/`M' {
 			quiet: bysort hhid itemmod: egen cxnfood`kmod' = total(xnonfood) if (itemmod==`kmod') & ((`kmod'==0) | (hhmod==`kmod'))
