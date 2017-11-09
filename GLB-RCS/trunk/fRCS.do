@@ -619,9 +619,8 @@ program define RCS_simulate
 			}
 			* if random item method
 			else {
-			
 			replace xfcons_pc = xfcons1_pc
-			replace xcons_pc = xfcons_pc + xdurables_pc 
+			replace xcons_pc = xfcons_pc + xdurables_pc + xnfcons1_pc
 			}
 			*estimate total consumption
 			*quiet: mi passive: replace xfcons_pc = xfcons0_pc + xfcons1_pc + xfcons2_pc + xfcons3_pc + xfcons4_pc
