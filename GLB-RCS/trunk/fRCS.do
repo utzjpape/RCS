@@ -485,7 +485,7 @@ program define RCS_simulate
 				}
 				drop avg_x*
 			}
-			else if ("`smethod'"=="ritem") {
+			else if ("`smethod'"=="ritem_avg") {
 				* extract variable names (reshaping and re-reshaping below results in extra variables)
 				qui ds
 				local all_vars `r(varlist)'
@@ -498,6 +498,36 @@ program define RCS_simulate
 				egen aux_avg_xnfitem = mean(xnfitem) if xnfitem>0, by(item)
 				egen avg_xfitem = mean(aux_avg_xfitem), by(item)
 				egen avg_xnfitem = mean(aux_avg_xnfitem), by(item)
+				* we know x's are missing if b's are zero:
+				replace xfitem = 0 if bfitem == 0
+				replace xnfitem = 0 if bnfitem == 0
+				* impute median if b's are unity but x's are missing:
+				replace xfitem = avg_xfitem if bfitem == 1 & xfitem==.y
+				replace xnfitem = avg_xnfitem if bnfitem == 1 & xnfitem==.y
+				drop avg_* aux_*
+				* aggregate
+				egen aux_xfcons1 = total(xfitem), by(hhid)
+				egen aux_xnfcons1 = total(xnfitem), by(hhid)
+				* reshape to wide format
+				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				replace xfcons1_pc = aux_xfcons1/hhsize
+				replace xnfcons1_pc = aux_xnfcons1/hhsize
+				* keep only initial variable list
+				keep `all_vars'
+			}
+			else if ("`smethod'"=="ritem_med") {
+				* extract variable names (reshaping and re-reshaping below results in extra variables)
+				qui ds
+				local all_vars `r(varlist)'
+				* reshape to long format
+				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				* drop value label - why does it appear in the first place?
+				capture label drop J00
+				* median for subsets with positive consumption
+				egen aux_avg_xfitem = median(xfitem) if xfitem>0, by(item)
+				egen aux_avg_xnfitem = median(xnfitem) if xnfitem>0, by(item)
+				egen avg_xfitem = median(aux_avg_xfitem), by(item)
+				egen avg_xnfitem = median(aux_avg_xnfitem), by(item)
 				* we know x's are missing if b's are zero:
 				replace xfitem = 0 if bfitem == 0
 				replace xnfitem = 0 if bnfitem == 0
@@ -575,15 +605,23 @@ program define RCS_simulate
 				}
 			}
 			*build aggregates; but replace with originals if available
-			quiet: `mipre' replace xfcons_pc = 0
-			quiet: foreach v of varlist xfcons?_pc {
-				`mipre' replace xfcons_pc = xfcons_pc + o`v' if o`v'<.
-				`mipre' replace xfcons_pc = xfcons_pc + `v' if o`v'>=.
+			if ("`smethod'"!="ritem_avg" & "`smethod'"!="ritem_med") {
+				quiet: `mipre' replace xfcons_pc = 0
+				quiet: foreach v of varlist xfcons?_pc {
+					`mipre' replace xfcons_pc = xfcons_pc + o`v' if o`v'<. 
+					`mipre' replace xfcons_pc = xfcons_pc + `v' if o`v'>=.
+				}
+				quiet: `mipre' replace xcons_pc = xfcons_pc + xdurables_pc
+				quiet: foreach v of varlist xnfcons?_pc {
+					`mipre' replace xcons_pc = xcons_pc + o`v' if o`v'<.
+					`mipre' replace xcons_pc = xcons_pc + `v' if o`v'>=.
+				}
 			}
-			quiet: `mipre' replace xcons_pc = xfcons_pc + xdurables_pc
-			quiet: foreach v of varlist xnfcons?_pc {
-				`mipre' replace xcons_pc = xcons_pc + o`v' if o`v'<.
-				`mipre' replace xcons_pc = xcons_pc + `v' if o`v'>=.
+			* if random item method
+			else {
+			
+			replace xfcons_pc = xfcons1_pc
+			replace xcons_pc = xfcons_pc + xdurables_pc 
 			}
 			*estimate total consumption
 			*quiet: mi passive: replace xfcons_pc = xfcons0_pc + xfcons1_pc + xfcons2_pc + xfcons3_pc + xfcons4_pc
@@ -639,7 +677,7 @@ program define RCS_collate
 				file write fh _n
 			}
 			*estimations
-			if inlist("`smethod'","med","avg","ritem","reg","tobit") {
+			if inlist("`smethod'","med","avg","ritem_avg","ritem_med","reg","tobit") {
 				file write fh "`isim'" _tab "1"
 				foreach id of local xhh {
 					quiet: summ xcons_pc if hhid==`id'
