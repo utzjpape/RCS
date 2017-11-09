@@ -574,7 +574,50 @@ program define RCS_estimate
 				* keep only initial variable list
 				keep `all_vars'
 			}
-			else if ("`smethod'"=="ritem_ols") {
+			else if ("`smethod'"=="ritem_ols_lin") {
+				qui ds
+				local all_vars `r(varlist)'
+				* reshape to long format
+				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				* drop value label - why does it appear in the first place?
+				capture label drop J00
+				* renaming
+				rename xfitem x1
+				rename bfitem b1
+				rename xnfitem x2
+				rename bnfitem b2
+				* further reshaping into long format
+				qui reshape long x b, i(hhid item) j(fonf)
+				egen item_class = group(item fonf)
+				* OLS with item-fixed effect and logged dependent
+				qui areg x `model' if x>0, absorb(item_class) 
+				predict x_hat, xb
+				predict aux_d, d
+				egen d = mean(aux_d), by(item_class)
+				replace x_hat = x_hat+d
+				* we know x's are missing if b's are zero:
+				replace x = 0 if b == 0
+				* impute linear preditor if b's are unity but x's are missing:
+				replace x = x_hat if b == 1 & x==.y
+				drop x_hat item_class aux_d d
+				* reshape to wide-format
+				qui reshape wide x b, i(hhid item) j(fonf)
+				* re- renaming
+				rename x1 xfitem
+				rename b1 bfitem
+				rename x2 xnfitem
+				rename b2 bnfitem
+				* aggregate
+				egen aux_xfcons1 = total(xfitem), by(hhid)
+				egen aux_xnfcons1 = total(xnfitem), by(hhid)
+				* reshape to wide format
+				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				replace xfcons1_pc = aux_xfcons1/hhsize
+				replace xnfcons1_pc = aux_xnfcons1/hhsize
+				* keep only initial variable list
+				keep `all_vars'
+			}
+			else if ("`smethod'"=="ritem_ols_log") {
 				qui ds
 				local all_vars `r(varlist)'
 				* reshape to long format
@@ -590,8 +633,8 @@ program define RCS_estimate
 				qui reshape long x b, i(hhid item) j(fonf)
 				egen item_class = group(item fonf)
 				gen lx = log(x)
-				* OLS with item-fixed effect
-				qui areg lx `model' , absorb(item_class) 
+				* OLS with item-fixed effect and logged dependent
+				qui areg lx `model', absorb(item_class) 
 				predict lx_hat, xb
 				predict aux_d, d
 				egen d = mean(aux_d), by(item_class)
@@ -615,9 +658,70 @@ program define RCS_estimate
 				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
 				replace xfcons1_pc = aux_xfcons1/hhsize
 				replace xnfcons1_pc = aux_xnfcons1/hhsize
-				*make sure to use the estimated module and not the original module
-				quiet: replace oxfcons1_pc = .
-				quiet: replace oxnfcons1_pc = .
+				* keep only initial variable list
+				keep `all_vars'
+			}
+		else if ("`smethod'"=="ritem_parx_log") {
+				qui ds
+				local all_vars `r(varlist)'
+				* reshape to long format
+				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				* original yes/no
+				gen obfitem = bfitem
+				gen obnfitem = bnfitem 
+				* no value or zero
+				replace bfitem = 0 if xfitem==.y
+				replace bnfitem = 0 if xnfitem==.y
+				* back to wide format
+				qui reshape wide xfitem xnfitem bfitem bnfitem obfitem obnfitem, i(hhid) j(item)
+				keep `all_vars' obfitem* obnfitem*
+				*partial aggregate
+				egen xpartial = rowtotal(xfitem* xnfitem*) // after reshape
+				gen lxpartial = log(xpartial)
+				* estimation
+				reg lxpartial `model' bfitem* bnfitem*
+				qui reshape long xfitem xnfitem bfitem bnfitem obfitem obnfitem, i(hhid) j(item)
+				replace bfitem = obfitem
+				replace bnfitem = obnfitem
+				drop obfitem obnfitem
+				qui reshape wide xfitem xnfitem bfitem bnfitem , i(hhid) j(item)
+				keep `all_vars' 
+				predict xb, xb
+				replace xb = exp(xb)
+				replace xfcons1_pc = xb/hhsize
+				replace xnfcons1_pc = 0
+				drop xb  
+				* keep only initial variable list
+				keep `all_vars'
+			}
+		else if ("`smethod'"=="ritem_parx_lin") {
+				qui ds
+				local all_vars `r(varlist)'
+				* reshape to long format
+				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				* original yes/no
+				gen obfitem = bfitem
+				gen obnfitem = bnfitem 
+				* no value or zero
+				replace bfitem = 0 if xfitem==.y
+				replace bnfitem = 0 if xnfitem==.y
+				* back to wide format
+				qui reshape wide xfitem xnfitem bfitem bnfitem obfitem obnfitem, i(hhid) j(item)
+				keep `all_vars' obfitem* obnfitem*
+				*partial aggregate
+				egen xpartial = rowtotal(xfitem* xnfitem*) // after reshape
+				* estimation
+				reg xpartial `model' bfitem* bnfitem*
+				qui reshape long xfitem xnfitem bfitem bnfitem obfitem obnfitem, i(hhid) j(item)
+				replace bfitem = obfitem
+				replace bnfitem = obnfitem
+				drop obfitem obnfitem
+				qui reshape wide xfitem xnfitem bfitem bnfitem , i(hhid) j(item)
+				keep `all_vars' 
+				predict xb, xb
+				replace xfcons1_pc = xb/hhsize
+				replace xnfcons1_pc = 0
+				drop xb  
 				* keep only initial variable list
 				keep `all_vars'
 			}
@@ -738,7 +842,7 @@ program define RCS_collate
 				file write fh _n
 			}
 			*estimations
-			if inlist("`smethod'","med","avg","ritem_avg","ritem_med","reg","tobit","ritem_ols") {
+			if inlist("`smethod'","med","avg","ritem_avg","ritem_med","reg","tobit","ritem_ols_log","ritem_ols_lin","ritem_parx_log","ritem_parx_lin") {
 				file write fh "`isim'" _tab "1"
 				foreach id of local xhh {
 					quiet: summ xcons_pc if hhid==`id'
