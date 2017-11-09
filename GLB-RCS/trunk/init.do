@@ -13,10 +13,18 @@ set sortseed 11041955
 
 if (inlist("${suser}","wb390290","WB390290")) {
 	*Utz
-	*Local directory of your checked out copy of the code
-	local swdLocal = "C:\Users\WB390290\OneDrive - WBG\Home\Research\RCS\SV-Analysis"
-	*Box directory where the Data folder can be located
-	local swdBox = "C:\Users\WB390290\OneDrive - WBG\Home\Research\RCS\Sh-RCS\DataBox"
+	if ("`c(hostname)'"=="WIN-82M1NHB392O") {
+		*on virtual machine
+		local swdLocal = "D:\SV-RCS"
+		*Box directory where the Data folder can be located
+		local swdBox = "D:\Sh-RCS\DataBox"
+	} 
+	else {
+		*Local directory of your checked out copy of the code
+		local swdLocal = "C:\Users\WB390290\OneDrive - WBG\Home\Research\RCS\SV-Analysis"
+		*Box directory where the Data folder can be located
+		local swdBox = "C:\Users\WB390290\OneDrive - WBG\Home\Research\RCS\Sh-RCS\DataBox"
+	}
 }
 *Aroob
 else if (inlist("${suser}","wb504672","WB504672")) {	
