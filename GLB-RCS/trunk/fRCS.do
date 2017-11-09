@@ -4,8 +4,8 @@
 * RCS_partition: sub-program called in RCS_prepare to partition items into modules
 *
 * RCS_prepare: must be run first; prepares the dataset; runs RCS_partition
-* RCS_assign: assigns households to their modules for each simulation
-* RCS_simulate: simulates RCS
+* RCS_masks: masks consumption of households
+* RCS_estimate: estimates consumption for each household in each consumption
 * RCS_collate: collates results from the simulation
 * RCS_analyze: analyzes the results
 
@@ -285,8 +285,17 @@ program define RCS_prepare
 	save "`lc_sdTemp'/fsim_nfpartition.dta", replace
 end
 
-capture: program drop RCS_assign
-program define RCS_assign
+* RCS_mask: creates one output file per simulation with masked consumption
+* parameters:
+*   using: prepared dataset for analysis
+*   dirbase: folder root to save files in Temp and Out folders
+*   nmodules: number of modules to split items into
+*   nsim: number of simulations to run
+*   rseed: random seed for reproducibility
+*   Prob: 0-1: probability for an item to be administered in detail (instead of just y/n)
+*         >1: maximum number of items to be administered in detail (instead of just y/n)
+capture: program drop RCS_mask
+program define RCS_mask
 	syntax using/, dirbase(string) nmodules(integer) nsim(integer) rseed(integer) [Prob(real 1.0)]
 	set seed `rseed'
 	local N = `nsim'
@@ -334,9 +343,16 @@ program define RCS_assign
 		*add binary yes/no indicator whether food is consumed
 		quiet: gen bfitem = xfood>0 if !missing(xfood)
 		quiet: replace bfitem = .z if xfood==.z
-		*mask consumption items with defined probability (if not administered)
+		*mask consumption items with defined probability or maximum number (if not administered)
 		quiet: gen r = runiform() if ~missing(bfitem)
-		quiet: replace xfood = .y if ~missing(r) & (r>`prob')
+		if (`prob'<=1) {
+			quiet: replace xfood = .y if ~missing(r) & (r>`prob')
+		}
+		else {
+			quiet: bysort hhid: egen rk = rank(r) if ~missing(r), unique
+			quiet: replace xfood = .y if (rk>`prob') & ~missing(r)
+			drop rk
+		}
 		drop r
 		*create module consumption
 		forvalues kmod = 0/`M' {
@@ -380,9 +396,16 @@ program define RCS_assign
 		*add binary yes/no indicator whether food is consumed (for assigned modules)
 		quiet: gen bnfitem = xnonfood>0 if !missing(xnonfood)
 		quiet: replace bnfitem = .z if xnonfood==.z
-		*mask consumption items with defined probability (if not administered)
+		*mask consumption items with defined probability or maximum number (if not administered)
 		quiet: gen r = runiform() if ~missing(bnfitem)
-		quiet: replace xnonfood = .y if ~missing(r) & (r>`prob')
+		if (`prob'<=1) {
+			quiet: replace xnonfood = .y if ~missing(r) & (r>`prob')
+		}
+		else {
+			quiet: bysort hhid: egen rk = rank(r) if ~missing(r), unique
+			quiet: replace xnonfood = .y if (rk>`prob') & ~missing(r)
+			drop rk
+		}
 		drop r
 		*create module consumption
 		forvalues kmod = 0/`M' {
@@ -432,8 +455,8 @@ program define RCS_assign
 	}
 end
 
-capture: program drop RCS_simulate
-program define RCS_simulate
+capture: program drop RCS_estimate
+program define RCS_estimate
 	syntax using/, dirbase(string) nmodules(integer) nsim(integer) nmi(integer) lmethod(namelist) model(string) rseed(integer)
 	*prepare output directories
 	local lc_sdTemp = "`dirbase'/Temp"
@@ -926,8 +949,8 @@ program define RCS_run
 	local dirbase = "`dirout'/d`ndiff'm`nmodules'p`prob_id'"
 	
 	RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') `EGALshare'
-	RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') prob(`prob')
-	RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model(`model') rseed(`rseed')
+	RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') prob(`prob')
+	RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model(`model') rseed(`rseed')
 	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
 	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
 end

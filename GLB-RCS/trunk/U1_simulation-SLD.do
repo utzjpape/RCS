@@ -51,8 +51,8 @@ gen x = rfood_pc + rnonfood_pc
 gen ratio = rfood_pc / x
 egen r = rank(x)
 sort x
-twoway (scatter ratio r) (qfit ratio r), title("Somaliland")
-graph export "${gsdOutput}\SLD_fshare.png", as(png) replace
+*twoway (scatter ratio r) (qfit ratio r), title("Somaliland")
+*graph export "${gsdOutput}\SLD_fshare.png", as(png) replace
 
 *get household characteristics
 use "`sData'/data_i_proc_public.dta", clear
@@ -131,15 +131,15 @@ local prob = 1
 include "${gsdDo}/fRCS.do"
 *RCS_run using "${gsdTemp}/HHData.dta", dirout("${gsdOutput}/SOM-d`ndiff'm`M'") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'") rseed(`rseed')
 RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
-RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
-RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
+RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
+RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
 RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
 RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
 
 *subrun
 if (1==2) {
 	include "${l_sdDo}/fRCS.do"
-	RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("tobit") model("`model'") rseed(`rseed')
+	RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("tobit") model("`model'") rseed(`rseed')
 	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("tobit")
 	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
 }
