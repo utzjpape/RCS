@@ -26,7 +26,7 @@ local nI = 50
 local ndiff = 3
 
 *methods
-local lmethod = "avg ritem"
+local lmethod = "ritem_avg ritem_med"
 
 *data directory
 local sData = "${gsdDataBox}/SOM-SLHS13"
@@ -118,7 +118,34 @@ local lmethod = "`lmethod'"
 local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood"
 local rseed = 23081980
 
-forv p=.6(.2)1 {  
+/*
+	local prob = .5
+	local probX100 = round(`prob'*100)
+	local dirbase = "${gsdOutput}/SOM-d`ndiff'm`M'p`probX100'"
+
+	include "${gsdDo}/fRCS.do"
+	*RCS_run using "${gsdTemp}/HHData.dta", dirout("${gsdOutput}/SOM-d`ndiff'm`M'") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'") rseed(`rseed')
+	RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
+	RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
+	RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
+	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
+	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
+	
+	local prob = .95
+	local probX100 = round(`prob'*100)
+	local dirbase = "${gsdOutput}/SOM-d`ndiff'm`M'p`probX100'"
+
+	include "${gsdDo}/fRCS.do"
+	*RCS_run using "${gsdTemp}/HHData.dta", dirout("${gsdOutput}/SOM-d`ndiff'm`M'") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'") rseed(`rseed')
+	RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
+	RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
+	RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
+	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
+	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
+	
+*/
+	
+forv p=.5(.2).9 {  
 	local prob = `p'
 	local probX100 = round(`prob'*100)
 	local dirbase = "${gsdOutput}/SOM-d`ndiff'm`M'p`probX100'"
@@ -131,6 +158,9 @@ forv p=.6(.2)1 {
 	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
 	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
 	}
+	
+	
+	dsaDSAD
 
 *subrun
 if (1==2) {
