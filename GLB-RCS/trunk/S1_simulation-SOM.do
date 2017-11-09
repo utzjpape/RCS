@@ -26,7 +26,7 @@ local nI = 50
 local ndiff = 3
 
 *methods
-local lmethod = "ritem_avg ritem_med"
+local lmethod = "ritem_ols ritem_med ritem_avg"
 
 *data directory
 local sData = "${gsdDataBox}/SOM-SLHS13"
@@ -145,7 +145,7 @@ local rseed = 23081980
 	
 */
 	
-forv p=.5(.2).9 {  
+forv p=.5(.1)1 {  
 	local prob = `p'
 	local probX100 = round(`prob'*100)
 	local dirbase = "${gsdOutput}/SOM-d`ndiff'm`M'p`probX100'"
