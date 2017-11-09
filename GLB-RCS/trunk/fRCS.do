@@ -545,6 +545,50 @@ program define RCS_simulate
 				* keep only initial variable list
 				keep `all_vars'
 			}
+			else if ("`smethod'"=="ritem_ols") {
+				qui ds
+				local all_vars `r(varlist)'
+				* reshape to long format
+				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				* drop value label - why does it appear in the first place?
+				capture label drop J00
+				* renaming
+				rename xfitem x1
+				rename bfitem b1
+				rename xnfitem x2
+				rename bnfitem b2
+				* further reshaping into long format
+				qui reshape long x b, i(hhid item) j(fonf)
+				egen item_class = group(item fonf)
+				gen lx = log(x)
+				* OLS with item-fixed effect
+				qui areg lx `model' , absorb(item_class) 
+				predict lx_hat, xb
+				predict aux_d, d
+				egen d = mean(aux_d), by(item_class)
+				replace lx_hat = lx_hat+d
+				* we know x's are missing if b's are zero:
+				replace x = 0 if b == 0
+				* impute linear preditor if b's are unity but x's are missing:
+				replace x = exp(lx_hat) if b == 1 & x==.y
+				drop lx lx_hat item_class aux_d d
+				* reshape to wide-format
+				qui reshape wide x b, i(hhid item) j(fonf)
+				* re- renaming
+				rename x1 xfitem
+				rename b1 bfitem
+				rename x2 xnfitem
+				rename b2 bnfitem
+				* aggregate
+				egen aux_xfcons1 = total(xfitem), by(hhid)
+				egen aux_xnfcons1 = total(xnfitem), by(hhid)
+				* reshape to wide format
+				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				replace xfcons1_pc = aux_xfcons1/hhsize
+				replace xnfcons1_pc = aux_xnfcons1/hhsize
+				* keep only initial variable list
+				keep `all_vars'
+			}
 			else if ("`smethod'"=="tobit") {
 				quiet: forvalues imod = 1/`M' {
 					*food
@@ -605,7 +649,7 @@ program define RCS_simulate
 				}
 			}
 			*build aggregates; but replace with originals if available
-			if ("`smethod'"!="ritem_avg" & "`smethod'"!="ritem_med") {
+			if ("`smethod'"!="ritem_avg" & "`smethod'"!="ritem_med" & "`smethod'"!="ritem_ols") {
 				quiet: `mipre' replace xfcons_pc = 0
 				quiet: foreach v of varlist xfcons?_pc {
 					`mipre' replace xfcons_pc = xfcons_pc + o`v' if o`v'<. 
@@ -676,7 +720,7 @@ program define RCS_collate
 				file write fh _n
 			}
 			*estimations
-			if inlist("`smethod'","med","avg","ritem_avg","ritem_med","reg","tobit") {
+			if inlist("`smethod'","med","avg","ritem_avg","ritem_med","reg","tobit","ritem_ols") {
 				file write fh "`isim'" _tab "1"
 				foreach id of local xhh {
 					quiet: summ xcons_pc if hhid==`id'
