@@ -512,6 +512,9 @@ program define RCS_simulate
 				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
 				replace xfcons1_pc = aux_xfcons1/hhsize
 				replace xnfcons1_pc = aux_xnfcons1/hhsize
+				*make sure to use the estimated module and not the original module
+				quiet: replace oxfcons1_pc = .
+				quiet: replace oxnfcons1_pc = .
 				* keep only initial variable list
 				keep `all_vars'
 			}
@@ -542,6 +545,9 @@ program define RCS_simulate
 				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
 				replace xfcons1_pc = aux_xfcons1/hhsize
 				replace xnfcons1_pc = aux_xnfcons1/hhsize
+				*make sure to use the estimated module and not the original module
+				quiet: replace oxfcons1_pc = .
+				quiet: replace oxnfcons1_pc = .
 				* keep only initial variable list
 				keep `all_vars'
 			}
@@ -586,6 +592,9 @@ program define RCS_simulate
 				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
 				replace xfcons1_pc = aux_xfcons1/hhsize
 				replace xnfcons1_pc = aux_xnfcons1/hhsize
+				*make sure to use the estimated module and not the original module
+				quiet: replace oxfcons1_pc = .
+				quiet: replace oxnfcons1_pc = .
 				* keep only initial variable list
 				keep `all_vars'
 			}
@@ -649,26 +658,12 @@ program define RCS_simulate
 				}
 			}
 			*build aggregates; but replace with originals if available
-			if ("`smethod'"!="ritem_avg" & "`smethod'"!="ritem_med" & "`smethod'"!="ritem_ols") {
-				quiet: `mipre' replace xfcons_pc = 0
-				quiet: foreach v of varlist xfcons?_pc {
-					`mipre' replace xfcons_pc = xfcons_pc + o`v' if o`v'<. 
-					`mipre' replace xfcons_pc = xfcons_pc + `v' if o`v'>=.
-				}
-				quiet: `mipre' replace xcons_pc = xfcons_pc + xdurables_pc
-				quiet: foreach v of varlist xnfcons?_pc {
-					`mipre' replace xcons_pc = xcons_pc + o`v' if o`v'<.
-					`mipre' replace xcons_pc = xcons_pc + `v' if o`v'>=.
-				}
-			}
-			* if random item method
-			else {
-			replace xfcons_pc = xfcons1_pc
-			replace xcons_pc = xfcons_pc + xdurables_pc + xnfcons1_pc
+			quiet: `mipre' replace xcons_pc = xdurables_pc
+			quiet: foreach v of varlist xfcons?_pc xnfcons?_pc {
+				`mipre' replace xcons_pc = xcons_pc + o`v' if ~missing(o`v')
+				`mipre' replace xcons_pc = xcons_pc + `v' if missing(o`v')
 			}
 			*estimate total consumption
-			*quiet: mi passive: replace xfcons_pc = xfcons0_pc + xfcons1_pc + xfcons2_pc + xfcons3_pc + xfcons4_pc
-			*quiet: mi passive: replace xcons_pc = xfcons_pc + xnfcons0_pc + xnfcons1_pc + xnfcons2_pc + xnfcons3_pc + xnfcons4_pc + 
 			drop bnfitem* bfitem*
 			quiet: compress
 			save "`lc_sdTemp'/sim_`smethod'_`isim'.dta", replace
