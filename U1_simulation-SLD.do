@@ -18,6 +18,8 @@ local bH = "_Hergeiza"
 *then we convert to USD using an average exchange rate of 20,360.53 Somali Shillings per USD in 2013, that is $1.5861 USD PPP (2013 Somaliland prices)
 *to finally convert to Somaliland Shillings using an average exchange rate of 6,733.69 Somaliland Shillings per USD in 2013, which gives us a poverty line of 10,680.11 Somaliland Shillings PPP (2013 Somaliland prices) per person per day, equivalent to $1.90 USD PPP (2011) 
 local xpovline = 10680.1112312 * .9387317 / (1000 * 12 / 365)
+*for Hergeiza calculation, we use the zupper national poverty line
+local xpovline_Hergeiza = "207.2878"
 
 include "${gsdDo}/fRCS.do"
 
@@ -44,7 +46,7 @@ save "${gsdTemp}/SLD-HH-NonFoodItems.dta", replace
 *IPL FGT0 should be rural 69 (2013) to 64 (2016) and urban 57 (2013) to 52 (2016)
 use "`sData'/wfilez.dta", clear
 svyset cluster [pweight=weight]
-gen poor = rpce < `xpovline'
+gen poor = rpce < `xpovline`bH''
 mean poor [pweight=weight*hsize], over(urban)
 *graph food share
 gen x = rfood_pc + rnonfood_pc
@@ -110,7 +112,7 @@ mean poor [pweight=weight*hhsize], over(urban)
 *number of modules
 local nmodules = 4
 *number of simulations
-local nsim = 18
+local nsim = 20
 *number of imputations 
 local nmi = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
@@ -121,7 +123,7 @@ local using= "${gsdData}/SLD`bH'-HHData.dta"
 local ncoref = 33
 local ncorenf = 25
 local ndiff=`ndiff'
-local povline = `xpovline' 
+local povline = `xpovline`bH'' 
 local lmethod = "`lmethod'"
 local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood urban"
 local dirbase = "${gsdOutput}/SLD`bH'-d`ndiff'm`nmodules'"
@@ -135,11 +137,3 @@ RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim')
 RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
 RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
 RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
-
-*subrun
-if (1==2) {
-	include "${l_sdDo}/fRCS.do"
-	RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("tobit") model("`model'") rseed(`rseed')
-	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("tobit")
-	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
-}
