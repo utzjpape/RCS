@@ -56,7 +56,7 @@ gen age_child = age<15 if age<.
 gen age_adult = inrange(age,15,64) if age<.
 gen age_senior = age>64 if age<.
 collapse (count) hhsize=age (sum) nchild=age_child nadult=age_adult nsenior=age_senior (firstnm) hhsex, by(id_clu id_hh)
-merge 1:1 id_clu id_hh using "`sData'/Section_G_Housing.dta", nogen assert(match master) keep(match) keepusing(g01 g08a g09a g11 g16 g18 weights)
+merge 1:1 id_clu id_hh using "`sData'/Section_G_Housing.dta", nogen keep(match) keepusing(g01 g08a g09a g11 g16 g18 weights)
 ren (g01 g08a g09a g11 g16 g18) (hhtenure hhunits hhrooms hhhouse hhcook hhtoilet)
 ren weights weight
 *simplify by setting missing values to conservative answers
@@ -126,7 +126,7 @@ local prob = 1
 include "${gsdDo}/fRCS.do"
 *RCS_run using "`lc_sdTemp'/HHData.dta", dirbase("${l_sdOut}") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'") egalshare
 RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
-RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
-RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
+RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
+RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
 RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
 RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
