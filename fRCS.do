@@ -643,6 +643,9 @@ program define RCS_estimate
 				replace xnfcons1_pc = aux_xnfcons1/hhsize
 				* keep only initial variable list
 				keep `all_vars'
+				* don't use originals
+				replace oxfcons1_pc = .
+				replace oxnfcons1_pc = .
 			}
 			else if ("`smethod'"=="ritem_ols_log") {
 				qui ds
@@ -687,6 +690,9 @@ program define RCS_estimate
 				replace xnfcons1_pc = aux_xnfcons1/hhsize
 				* keep only initial variable list
 				keep `all_vars'
+				* don't use originals
+				replace oxfcons1_pc = .
+				replace oxnfcons1_pc = .
 			}
 		else if ("`smethod'"=="ritem_parx_log") {
 				qui ds
