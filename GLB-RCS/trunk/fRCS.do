@@ -514,32 +514,44 @@ program define RCS_estimate
 				local all_vars `r(varlist)'
 				* reshape to long format
 				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
-				* drop value label - why does it appear in the first place?
+				* drop value label - but why does it appear in the first place?
 				capture label drop J00
+				rename xfitem x1
+				rename bfitem b1
+				rename xnfitem x2
+				rename bnfitem b2
+				* further reshaping into long format
+				qui reshape long x b, i(hhid item) j(fonf)
+				sort hhid fonf item x b
 				* avg for subsets with positive consumption
-				egen aux_avg_xfitem = mean(xfitem) if xfitem>0, by(item)
-				egen aux_avg_xnfitem = mean(xnfitem) if xnfitem>0, by(item)
-				egen avg_xfitem = mean(aux_avg_xfitem), by(item)
-				egen avg_xnfitem = mean(aux_avg_xnfitem), by(item)
-				* we know x's are missing if b's are zero:
-				replace xfitem = 0 if bfitem == 0
-				replace xnfitem = 0 if bnfitem == 0
-				* impute median if b's are unity but x's are missing:
-				replace xfitem = avg_xfitem if bfitem == 1 & xfitem==.y
-				replace xnfitem = avg_xnfitem if bnfitem == 1 & xnfitem==.y
-				drop avg_* aux_*
-				* aggregate
-				egen aux_xfcons1 = total(xfitem), by(hhid)
-				egen aux_xnfcons1 = total(xnfitem), by(hhid)
+				egen aux_avg_x = mean(x) if x!=0 & x!=., by(item fonf)
+				egen avg_x = mean(aux_avg_x), by(item fonf)
+				gen xx = x
+				replace xx = 0 if b==0
+				replace xx = avg_x if b==1 & x==.y
+				replace x = xx
+				drop aux* avg* xx
+				* reshape to wide-format
+				qui reshape wide x b, i(hhid item) j(fonf)
+				* re- renaming
+				rename x1 xfitem
+				rename b1 bfitem
+				rename x2 xnfitem
+				rename b2 bnfitem
 				* reshape to wide format
 				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				* aggregate
+				* keep only original variables
+				keep `all_vars' 
+				* totals
+				egen aux_xfcons1 = rowtotal(xfitem*)
+				egen aux_xnfcons1 = rowtotal(xnfitem*)
 				replace xfcons1_pc = aux_xfcons1/hhsize
 				replace xnfcons1_pc = aux_xnfcons1/hhsize
-				*make sure to use the estimated module and not the original module
-				quiet: replace oxfcons1_pc = .
-				quiet: replace oxnfcons1_pc = .
-				* keep only initial variable list
-				keep `all_vars'
+				drop aux*
+				* don't use originals
+				replace oxfcons1_pc = .
+				replace oxnfcons1_pc = .
 			}
 			else if ("`smethod'"=="ritem_med") {
 				* extract variable names (reshaping and re-reshaping below results in extra variables)
@@ -547,32 +559,47 @@ program define RCS_estimate
 				local all_vars `r(varlist)'
 				* reshape to long format
 				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
-				* drop value label - why does it appear in the first place?
+				* drop value label - but why does it appear in the first place?
 				capture label drop J00
-				* median for subsets with positive consumption
-				egen aux_avg_xfitem = median(xfitem) if xfitem>0, by(item)
-				egen aux_avg_xnfitem = median(xnfitem) if xnfitem>0, by(item)
-				egen avg_xfitem = median(aux_avg_xfitem), by(item)
-				egen avg_xnfitem = median(aux_avg_xnfitem), by(item)
-				* we know x's are missing if b's are zero:
-				replace xfitem = 0 if bfitem == 0
-				replace xnfitem = 0 if bnfitem == 0
-				* impute median if b's are unity but x's are missing:
-				replace xfitem = avg_xfitem if bfitem == 1 & xfitem==.y
-				replace xnfitem = avg_xnfitem if bnfitem == 1 & xnfitem==.y
-				drop avg_* aux_*
+				rename xfitem x1
+				rename bfitem b1
+				rename xnfitem x2
+				rename bnfitem b2
+				* further reshaping into long format
+				qui reshape long x b, i(hhid item) j(fonf)
+				sort hhid fonf item x b
+				* avg for subsets with positive consumption
+				egen aux_avg_x = median(x) if x!=0 & x!=., by(item fonf)
+				egen avg_x = median(aux_avg_x), by(item fonf)
+				gen xx = x
+				replace xx = 0 if b == 0
+				replace xx = avg_x if b == 1 & x==.y
+				replace x = xx
+				drop aux* avg* xx
+				* reshape to wide-format
+				qui reshape wide x b, i(hhid item) j(fonf)
+				* re- renaming
+				rename x1 xfitem
+				rename b1 bfitem
+				rename x2 xnfitem
+				rename b2 bnfitem
 				* aggregate
 				egen aux_xfcons1 = total(xfitem), by(hhid)
 				egen aux_xnfcons1 = total(xnfitem), by(hhid)
 				* reshape to wide format
 				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				* aggregate
+				* keep only original variables
+				keep `all_vars' 
+				* totals
+				egen aux_xfcons1 = rowtotal(xfitem*)
+				egen aux_xnfcons1 = rowtotal(xnfitem*)
 				replace xfcons1_pc = aux_xfcons1/hhsize
 				replace xnfcons1_pc = aux_xnfcons1/hhsize
-				*make sure to use the estimated module and not the original module
-				quiet: replace oxfcons1_pc = .
-				quiet: replace oxnfcons1_pc = .
-				* keep only initial variable list
-				keep `all_vars'
+				drop aux*
+				* don't use originals
+				replace oxfcons1_pc = .
+				replace oxnfcons1_pc = .
 			}
 			else if ("`smethod'"=="ritem_ols_lin") {
 				qui ds
@@ -676,10 +703,10 @@ program define RCS_estimate
 				qui reshape wide xfitem xnfitem bfitem bnfitem obfitem obnfitem, i(hhid) j(item)
 				keep `all_vars' obfitem* obnfitem*
 				*partial aggregate
-				egen xpartial = rowtotal(xfitem* xnfitem*) // after reshape
+				egen xpartial = rowtotal(xfitem* xnfitem*) 
 				gen lxpartial = log(xpartial)
 				* estimation
-				reg lxpartial `model' bfitem* bnfitem*
+				qui reg lxpartial `model' bfitem* bnfitem*
 				qui reshape long xfitem xnfitem bfitem bnfitem obfitem obnfitem, i(hhid) j(item)
 				replace bfitem = obfitem
 				replace bnfitem = obnfitem
@@ -688,6 +715,7 @@ program define RCS_estimate
 				keep `all_vars' 
 				predict xb, xb
 				replace xb = exp(xb)
+				* assign zero nonfood consumption
 				replace xfcons1_pc = xb/hhsize
 				replace xnfcons1_pc = 0
 				drop xb  
@@ -709,9 +737,9 @@ program define RCS_estimate
 				qui reshape wide xfitem xnfitem bfitem bnfitem obfitem obnfitem, i(hhid) j(item)
 				keep `all_vars' obfitem* obnfitem*
 				*partial aggregate
-				egen xpartial = rowtotal(xfitem* xnfitem*) // after reshape
+				egen xpartial = rowtotal(xfitem* xnfitem*) 
 				* estimation
-				reg xpartial `model' bfitem* bnfitem*
+				qui reg xpartial `model' bfitem* bnfitem*
 				qui reshape long xfitem xnfitem bfitem bnfitem obfitem obnfitem, i(hhid) j(item)
 				replace bfitem = obfitem
 				replace bnfitem = obnfitem
@@ -719,6 +747,7 @@ program define RCS_estimate
 				qui reshape wide xfitem xnfitem bfitem bnfitem , i(hhid) j(item)
 				keep `all_vars' 
 				predict xb, xb
+				* assign zero nonfood consumption
 				replace xfcons1_pc = xb/hhsize
 				replace xnfcons1_pc = 0
 				drop xb  
@@ -784,11 +813,16 @@ program define RCS_estimate
 					error 1
 				}
 			}
+			if (substr("`smethod'",1,5)!="ritem") {
 			*build aggregates; but replace with originals if available
 			quiet: `mipre' replace xcons_pc = xdurables_pc
 			quiet: foreach v of varlist xfcons?_pc xnfcons?_pc {
 				`mipre' replace xcons_pc = xcons_pc + o`v' if ~missing(o`v')
 				`mipre' replace xcons_pc = xcons_pc + `v' if missing(o`v')
+				}
+			}
+			else if (substr("`smethod'",1,5)=="ritem") {
+			replace xcons_pc = xfcons1_pc + xnfcons1_pc + xdurables_pc
 			}
 			*estimate total consumption
 			drop bnfitem* bfitem*
@@ -842,7 +876,7 @@ program define RCS_collate
 				file write fh _n
 			}
 			*estimations
-			if inlist("`smethod'","med","avg","ritem_avg","ritem_med","reg","tobit","ritem_ols_log","ritem_ols_lin","ritem_parx_log","ritem_parx_lin") {
+			if inlist("`smethod'","ritem_avg","ritem_med","reg","tobit","ritem_ols_log","ritem_ols_lin","ritem_parx_log","ritem_parx_lin") {
 				file write fh "`isim'" _tab "1"
 				foreach id of local xhh {
 					quiet: summ xcons_pc if hhid==`id'
