@@ -47,6 +47,44 @@ program define fItems2RCS
 	}
 end
 
+*RCS_describe prepares some stats from the initial dataset
+* parameter:
+*   using: input file for RCS
+*   dirbase: directory for output
+capture: program drop RCS_describe
+program define RCS_describe
+	syntax using/, dirbase(string)
+	*prepare output directories
+	capture: mkdir "`dirbase'"
+	local lc_sdTemp = "`dirbase'/Temp"
+	capture: mkdir "`lc_sdTemp'"
+	local lc_sdOut = "`dirbase'/Out"
+	capture: mkdir "`lc_sdOut'"
+
+	use "`using'", clear
+	*histogram for administered items
+	egen xc = anycount(xfood*), values(0)
+	egen n_food = rownonmiss(xfood*)
+	gen x_food = n_food - xc
+	label var n_food "Number of food items"
+	label var x_food "Number of administered food items"
+	hist x_food, freq graphregion(color(white)) bgcolor(white) bcolor(eltblue) name(gRCS_xfood, replace)
+	drop xc
+	*non food
+	egen xc = anycount(xnonfood*), values(0)
+	egen n_nonfood = rownonmiss(xnonfood*)
+	gen x_nonfood = n_nonfood - xc
+	label var n_nonfood "Number of non-food items"
+	label var x_nonfood "Number of administered non-food items"
+	hist x_nonfood, freq graphregion(color(white)) bgcolor(white) bcolor(eltblue) name(gRCS_xnonfood, replace)
+	summ x_food n_food x_nonfood n_nonfood
+	drop xc n_food n_nonfood x_food x_nonfood
+	*produce combined graph
+	graph combine gRCS_xfood gRCS_xnonfood, name(gRCS_xcmb, replace)
+	graph export "`lc_sdOut'/descr_nitems.png", replace
+	graph drop gRCS_xfood gRCS_xnonfood gRCS_xcmb
+end
+
 *RCS_partition xvalue, hhid("hhid") itemid("foodid") fweight("weight") hhsize("hhsize") nmodules(4) ncore(33) ndiff(3)
 *use "`lc_sdTemp'/HH-Food.dta", clear
 *local xvalue = "xfood"
