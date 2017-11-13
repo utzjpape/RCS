@@ -67,22 +67,30 @@ program define RCS_describe
 	egen n_food = rownonmiss(xfood*)
 	gen x_food = n_food - xc
 	label var n_food "Number of food items"
-	label var x_food "Number of administered food items"
-	hist x_food, freq graphregion(color(white)) bgcolor(white) bcolor(eltblue) name(gRCS_xfood, replace)
-	drop xc
+	label var x_food "Consumed food items"
+	hist x_food, freq ylabel(,angle(0)) graphregion(color(white)) bgcolor(white) bcolor(eltblue) name(gRCS_xfood, replace)
+	egen t_food = rowtotal(xfood*)
+	label var t_food "Food consumption"
+	quiet: summ t_food, d
+	scatter t_food x_food if t_food<`r(p95)' || lfit t_food x_food if t_food<`r(p95)', ylabel(,angle(0)) legend(size(small)) graphregion(color(white)) bgcolor(white) bcolor(eltblue) name(gRCS_tfood, replace)
+	drop xc t_food
 	*non food
 	egen xc = anycount(xnonfood*), values(0)
 	egen n_nonfood = rownonmiss(xnonfood*)
 	gen x_nonfood = n_nonfood - xc
 	label var n_nonfood "Number of non-food items"
-	label var x_nonfood "Number of administered non-food items"
-	hist x_nonfood, freq graphregion(color(white)) bgcolor(white) bcolor(eltblue) name(gRCS_xnonfood, replace)
+	label var x_nonfood "Consumed non-food items"
+	hist x_nonfood, freq ylabel(,angle(0)) graphregion(color(white)) bgcolor(white) bcolor(eltblue) name(gRCS_xnonfood, replace)
+	egen t_nonfood = rowtotal(xnonfood*)
+	label var t_nonfood "Non-food consumption"
+	quiet: summ t_nonfood, d
+	scatter t_nonfood x_nonfood if t_nonfood<`r(p95)' || lfit t_nonfood x_nonfood if t_nonfood<`r(p95)', ylabel(,angle(0)) legend(size(small)) graphregion(color(white)) bgcolor(white) bcolor(eltblue) name(gRCS_tnonfood, replace)
 	summ x_food n_food x_nonfood n_nonfood
-	drop xc n_food n_nonfood x_food x_nonfood
+	drop xc n_food n_nonfood x_food x_nonfood t_nonfood
 	*produce combined graph
-	graph combine gRCS_xfood gRCS_xnonfood, name(gRCS_xcmb, replace)
+	graph combine gRCS_xfood gRCS_xnonfood gRCS_tfood gRCS_tnonfood, graphregion(color(white)) name(gRCS_xcmb, replace)
 	graph export "`lc_sdOut'/descr_nitems.png", replace
-	graph drop gRCS_xfood gRCS_xnonfood gRCS_xcmb
+	graph drop gRCS_xfood gRCS_tfood gRCS_xnonfood gRCS_tnonfood gRCS_xcmb
 end
 
 *RCS_partition xvalue, hhid("hhid") itemid("foodid") fweight("weight") hhsize("hhsize") nmodules(4) ncore(33) ndiff(3)
@@ -382,7 +390,7 @@ program define RCS_mask
 		quiet: gen bfitem = xfood>0 if !missing(xfood)
 		quiet: replace bfitem = .z if xfood==.z
 		*mask consumption items with defined probability or maximum number (if not administered)
-		quiet: gen r = runiform() if ~missing(bfitem)
+		quiet: gen r = runiform() if ~missing(bfitem) & (bfitem==1)
 		if (`prob'<=1) {
 			quiet: replace xfood = .y if ~missing(r) & (r>`prob')
 		}
@@ -435,7 +443,7 @@ program define RCS_mask
 		quiet: gen bnfitem = xnonfood>0 if !missing(xnonfood)
 		quiet: replace bnfitem = .z if xnonfood==.z
 		*mask consumption items with defined probability or maximum number (if not administered)
-		quiet: gen r = runiform() if ~missing(bnfitem)
+		quiet: gen r = runiform() if ~missing(bnfitem) & (bnfitem==1)
 		if (`prob'<=1) {
 			quiet: replace xnonfood = .y if ~missing(r) & (r>`prob')
 		}
@@ -562,11 +570,11 @@ program define RCS_estimate
 				qui reshape long x b, i(hhid item) j(fonf)
 				sort hhid fonf item x b
 				* avg for subsets with positive consumption
-				egen aux_avg_x = mean(x) if x!=0 & x!=., by(item fonf)
+				egen aux_avg_x = mean(x) if x!=0 & ~missing(x), by(item fonf)
 				egen avg_x = mean(aux_avg_x), by(item fonf)
 				gen xx = x
 				replace xx = 0 if b==0
-				replace xx = avg_x if b==1 & x==.y
+				replace xx = avg_x if b==1 & missing(x)
 				replace x = xx
 				drop aux* avg* xx
 				* reshape to wide-format
