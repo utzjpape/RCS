@@ -19,14 +19,14 @@ gen plinePPP=10680.1112312 * .9387317
 *number of modules
 local M = 1
 *number of simulations
-local N = 20
+local N = 3
 *number of imputations 
 local nI = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
 local ndiff = 3
 
-*methods
-local lmethod = "ritem_ols ritem_med ritem_avg"
+*methods *ritem_parx_log ritem_parx_lin
+local lmethod = "ritem_avg ritem_ols_lin"
 
 *data directory
 local sData = "${gsdDataBox}/SOM-SLHS13"
@@ -145,16 +145,21 @@ local rseed = 23081980
 	
 */
 	
-forv p=.5(.1)1 {  
+foreach p of numlist 4 5 10 {
 	local prob = `p'
-	local probX100 = round(`prob'*100)
-	local dirbase = "${gsdOutput}/SOM-d`ndiff'm`M'p`probX100'"
+	if `p' <= 1 {
+		local ppar = round(`prob'*100)
+		} 
+		else {
+		local ppar = `prob'
+		}
+	local dirbase = "${gsdOutput}/SOM-d`ndiff'm`M'p`ppar'"
 
 	include "${gsdDo}/fRCS.do"
 	*RCS_run using "${gsdTemp}/HHData.dta", dirout("${gsdOutput}/SOM-d`ndiff'm`M'") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'") rseed(`rseed')
 	RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
-	RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
-	RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
+	RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
+	RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
 	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
 	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
 	}
