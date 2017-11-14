@@ -555,38 +555,36 @@ program define RCS_estimate
 				drop avg_x*
 			}
 			else if ("`smethod'"=="ritem_avg") {
-				* extract variable names (reshaping and re-reshaping below results in extra variables)
+				* initial variable list
 				qui ds
 				local all_vars `r(varlist)'
+				* renaming					
+				rename xfitem* x1*
+				rename xnfitem* x2*
+				rename bfitem* b1*
+				rename bnfitem* b2* 
 				* reshape to long format
-				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
-				* drop value label - but why does it appear in the first place?
-				capture label drop J00
-				rename xfitem x1
-				rename bfitem b1
-				rename xnfitem x2
-				rename bnfitem b2
-				* further reshaping into long format
-				qui reshape long x b, i(hhid item) j(fonf)
-				sort hhid fonf item x b
-				* avg for subsets with positive consumption
-				egen aux_avg_x = mean(x) if x!=0 & ~missing(x), by(item fonf)
-				egen avg_x = mean(aux_avg_x), by(item fonf)
-				gen xx = x
-				replace xx = 0 if b==0
-				replace xx = avg_x if b==1 & missing(x)
-				replace x = xx
-				drop aux* avg* xx
-				* reshape to wide-format
-				qui reshape wide x b, i(hhid item) j(fonf)
-				* re- renaming
-				rename x1 xfitem
-				rename b1 bfitem
-				rename x2 xnfitem
-				rename b2 bnfitem
-				* reshape to wide format
-				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
-				* aggregate
+				qui reshape long x b, i(hhid) j(item)
+				gen food = item<2000
+				* total number of items consumed per category (food - nonfood) and number evaluated
+				egen nc = sum(b), by(hhid food)
+				egen ne = sum(x>0 & ~missing(x)), by(hhid food)
+				* total items consumed
+				egen nt = sum(b), by(hhid) 
+				* weigh
+				gen w = nc/ne
+				* per capita value
+				gen y = x/hhsize
+				* estimate, predict, impute
+				quiet reg y i.item [pw=w] if b==1 & ~missing(x)
+				predict xb, xb
+				replace x = xb*hhsize if b==1 & missing(x)
+				drop food nc ne w y xb
+				qui reshape wide x b, i(hhid) j(item)
+				rename x1* xfitem*
+				rename x2* xnfitem*
+				rename b1* bfitem*
+				rename b2* bnfitem*
 				* keep only original variables
 				keep `all_vars' 
 				* totals
@@ -600,41 +598,105 @@ program define RCS_estimate
 				replace oxnfcons1_pc = .
 			}
 			else if ("`smethod'"=="ritem_med") {
-				* extract variable names (reshaping and re-reshaping below results in extra variables)
+					qui ds
+				local all_vars `r(varlist)'
+				* get labels
+				preserve
+					keep xfitem* bfitem* hhid
+					qui reshape long xfitem bfitem, i(hhid) j(item)
+					qui levelsof item, local(food_items)
+				restore	
+				preserve
+					keep xnfitem* bnfitem* hhid
+					qui reshape long xnfitem bnfitem, i(hhid) j(item)
+					qui levelsof item, local(nonfood_items)
+				restore	
+				* renaming					
+				rename xfitem* x1*
+				rename xnfitem* x2*
+				rename bfitem* b1*
+				rename bnfitem* b2* 
+				* reshape to long format
+				qui reshape long x1 x2 b1 b2, i(hhid) j(item)
+				* total number of items consumed
+				egen n1 = sum(b1), by(hhid)
+				egen n2 = sum(b2), by(hhid)
+				* number of items evaluated
+				egen e1 = sum(x1>0 & ~missing(x1)), by(hhid)
+				egen e2 = sum(x2>0 & ~missing(x2)), by(hhid)
+				* per capita values 
+				*replace x1 = x1/hhsize
+				*replace x2 = x2/hhsize				
+				* reshaping to wide format
+				qui reshape wide x1 x2 b1 b2, i(hhid) j(item)
+				* renaming
+				rename x1* xfitem*
+				rename x2* xnfitem*
+				rename b1* bfitem*
+				rename b2* bnfitem*
+				* weights
+				* these are base weights only!
+				gen w1 = (n1/e1)*hhsize
+				gen w2 = (n2/e2)*hhsize			
+				* loop over food items: 
+				* mean if consumption positive and not masked, replace with mean if consumption positive but masked
+				qui foreach code of local food_items {
+					* per capita consumption
+					gen x = xfitem`code'/hhsize
+					quiet capture _pctile x [pw=w1] if bfitem`code'==1 & ~missing(xfitem`code')
+					capture replace xfitem`code' = r(r1)*hhsize if bfitem`code'==1 & missing(xfitem`code')
+					drop x
+				}
+				* loop over nonfood items
+				qui foreach code of local nonfood_items {
+					* per capita consumption
+					gen x = xnfitem`code'/hhsize
+					quiet capture _pctile x [pw=w2] if bnfitem`code'==1 & ~missing(xnfitem`code')
+					capture replace xnfitem`code' = r(r1)*hhsize if bnfitem`code'==1 & missing(xnfitem`code')
+					drop x
+				}
+				keep `all_vars' 
+				* totals
+				egen aux_xfcons1_pc = rowtotal(xfitem*)
+				egen aux_xnfcons1_pc = rowtotal(xnfitem*)
+				replace xfcons1_pc = aux_xfcons1_pc/hhsize
+				replace xnfcons1_pc = aux_xnfcons1_pc/hhsize
+				drop aux_*
+				* don't use originals
+				replace oxfcons1_pc = .
+				replace oxnfcons1_pc = .
+			}
+			else if ("`smethod'"=="ritem_ols_lin") {
+				* initial variable list
 				qui ds
 				local all_vars `r(varlist)'
+				* renaming					
+				rename xfitem* x1*
+				rename xnfitem* x2*
+				rename bfitem* b1*
+				rename bnfitem* b2* 
 				* reshape to long format
-				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
-				* drop value label - but why does it appear in the first place?
-				capture label drop J00
-				rename xfitem x1
-				rename bfitem b1
-				rename xnfitem x2
-				rename bnfitem b2
-				* further reshaping into long format
-				qui reshape long x b, i(hhid item) j(fonf)
-				sort hhid fonf item x b
-				* avg for subsets with positive consumption
-				egen aux_avg_x = median(x) if x!=0 & x!=., by(item fonf)
-				egen avg_x = median(aux_avg_x), by(item fonf)
-				gen xx = x
-				replace xx = 0 if b == 0
-				replace xx = avg_x if b == 1 & x==.y
-				replace x = xx
-				drop aux* avg* xx
-				* reshape to wide-format
-				qui reshape wide x b, i(hhid item) j(fonf)
-				* re- renaming
-				rename x1 xfitem
-				rename b1 bfitem
-				rename x2 xnfitem
-				rename b2 bnfitem
-				* aggregate
-				egen aux_xfcons1 = total(xfitem), by(hhid)
-				egen aux_xnfcons1 = total(xnfitem), by(hhid)
-				* reshape to wide format
-				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
-				* aggregate
+				qui reshape long x b, i(hhid) j(item)
+				gen food = item<2000
+				* total number of items consumed per category (food - nonfood) and number evaluated
+				egen nc = sum(b), by(hhid food)
+				egen ne = sum(x>0 & ~missing(x)), by(hhid food)
+				* total items consumed
+				egen nt = sum(b), by(hhid) 
+				* weigh
+				gen w = nc/ne
+				* per capita value
+				gen y = x/hhsize
+				* estimate, predict, impute
+				quiet reg y i.item##c.nt [pw=w] if b==1 & ~missing(x)
+				predict xb, xb
+				replace x = xb*hhsize if b==1 & missing(x)
+				drop food nc ne w y xb
+				qui reshape wide x b, i(hhid) j(item)
+				rename x1* xfitem*
+				rename x2* xnfitem*
+				rename b1* bfitem*
+				rename b2* bnfitem*
 				* keep only original variables
 				keep `all_vars' 
 				* totals
@@ -647,95 +709,60 @@ program define RCS_estimate
 				replace oxfcons1_pc = .
 				replace oxnfcons1_pc = .
 			}
-			else if ("`smethod'"=="ritem_ols_lin") {
+			else if ("`smethod'"=="ritem_ols_log") {
+				* initial variable list
 				qui ds
 				local all_vars `r(varlist)'
+				* renaming					
+				rename xfitem* x1*
+				rename xnfitem* x2*
+				rename bfitem* b1*
+				rename bnfitem* b2* 
 				* reshape to long format
-				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
-				* drop value label - why does it appear in the first place?
-				capture label drop J00
-				* renaming
-				rename xfitem x1
-				rename bfitem b1
-				rename xnfitem x2
-				rename bnfitem b2
-				* further reshaping into long format
-				qui reshape long x b, i(hhid item) j(fonf)
-				egen item_class = group(item fonf)
-				* OLS with item-fixed effect and logged dependent
-				qui areg x `model' if x>0, absorb(item_class) 
-				predict x_hat, xb
-				predict aux_d, d
-				egen d = mean(aux_d), by(item_class)
-				replace x_hat = x_hat+d
-				* we know x's are missing if b's are zero:
-				replace x = 0 if b == 0
-				* impute linear preditor if b's are unity but x's are missing:
-				replace x = x_hat if b == 1 & x==.y
-				drop x_hat item_class aux_d d
-				* reshape to wide-format
-				qui reshape wide x b, i(hhid item) j(fonf)
-				* re- renaming
-				rename x1 xfitem
-				rename b1 bfitem
-				rename x2 xnfitem
-				rename b2 bnfitem
-				* aggregate
-				egen aux_xfcons1 = total(xfitem), by(hhid)
-				egen aux_xnfcons1 = total(xnfitem), by(hhid)
-				* reshape to wide format
-				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				qui reshape long x b, i(hhid) j(item)
+				gen food = item<2000
+				* total number of items consumed per category (food - nonfood) and number evaluated
+				egen nc = sum(b), by(hhid food)
+				egen ne = sum(x>0 & ~missing(x)), by(hhid food)
+				* total items consumed
+				egen nt = sum(b), by(hhid) 
+				* weigh
+				gen w = nc/ne
+				* per capita value
+				gen y = x/hhsize
+				* logs
+				gen lnt = log(nt)
+				gen ly = log(y)
+				* estimate, predict, impute
+				quiet reg ly i.item##c.lnt [pw=w] if b==1 & ~missing(x)
+				predict xb, xb
+				replace x = exp(xb)*hhsize if b==1 & missing(x)
+				drop food nc ne w y xb ly lnt 
+				qui reshape wide x b, i(hhid) j(item)
+				rename x1* xfitem*
+				rename x2* xnfitem*
+				rename b1* bfitem*
+				rename b2* bnfitem*
+				* keep only original variables
+				keep `all_vars' 
+				* totals
+				egen aux_xfcons1 = rowtotal(xfitem*)
+				egen aux_xnfcons1 = rowtotal(xnfitem*)
 				replace xfcons1_pc = aux_xfcons1/hhsize
 				replace xnfcons1_pc = aux_xnfcons1/hhsize
-				* keep only initial variable list
-				keep `all_vars'
+				drop aux*
 				* don't use originals
 				replace oxfcons1_pc = .
 				replace oxnfcons1_pc = .
-			}
-			else if ("`smethod'"=="ritem_ols_log") {
-				qui ds
-				local all_vars `r(varlist)'
-				* reshape to long format
-				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
-				* drop value label - why does it appear in the first place?
-				capture label drop J00
-				* renaming
-				rename xfitem x1
-				rename bfitem b1
-				rename xnfitem x2
-				rename bnfitem b2
-				* further reshaping into long format
-				qui reshape long x b, i(hhid item) j(fonf)
-				egen item_class = group(item fonf)
-				gen lx = log(x)
-				* OLS with item-fixed effect and logged dependent
-				qui areg lx `model', absorb(item_class) 
-				predict lx_hat, xb
-				predict aux_d, d
-				egen d = mean(aux_d), by(item_class)
-				replace lx_hat = lx_hat+d
-				* we know x's are missing if b's are zero:
-				replace x = 0 if b == 0
-				* impute linear preditor if b's are unity but x's are missing:
-				replace x = exp(lx_hat) if b == 1 & x==.y
-				drop lx lx_hat item_class aux_d d
-				* reshape to wide-format
-				qui reshape wide x b, i(hhid item) j(fonf)
-				* re- renaming
-				rename x1 xfitem
-				rename b1 bfitem
-				rename x2 xnfitem
-				rename b2 bnfitem
 				* aggregate
-				egen aux_xfcons1 = total(xfitem), by(hhid)
-				egen aux_xnfcons1 = total(xnfitem), by(hhid)
-				* reshape to wide format
-				qui reshape wide xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
+				* keep only original variables
+				keep `all_vars' 
+				* totals
+				egen aux_xfcons1 = rowtotal(xfitem*)
+				egen aux_xnfcons1 = rowtotal(xnfitem*)
 				replace xfcons1_pc = aux_xfcons1/hhsize
 				replace xnfcons1_pc = aux_xnfcons1/hhsize
-				* keep only initial variable list
-				keep `all_vars'
+				drop aux*
 				* don't use originals
 				replace oxfcons1_pc = .
 				replace oxnfcons1_pc = .
@@ -1125,7 +1152,7 @@ program define RCS_analyze
 	file close fh
 	*combine graphs
 	foreach sind of local lind {
-		graph combine `gl_`sind'', name("cmb_`sind'", replace)
+		graph combine `gl_`sind'', name("cmb_`sind'", replace) graphregion(col(white))
 		graph export "`lc_sdOut'/`sind'.png", replace
 		graph drop `gl_`sind'' cmb_`sind'
 	}
