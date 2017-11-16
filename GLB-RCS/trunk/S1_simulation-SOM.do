@@ -19,14 +19,14 @@ gen plinePPP=10680.1112312 * .9387317
 *number of modules
 local M = 1
 *number of simulations
-local N = 3
+local N = 5
 *number of imputations 
 local nI = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
 local ndiff = 3
 
 *methods *ritem_parx_log ritem_parx_lin
-local lmethod = "ritem_avg ritem_ols_lin"
+local lmethod = "ritem_med ritem_ols_lin_fe"
 
 *data directory
 local sData = "${gsdDataBox}/SOM-SLHS13"
@@ -144,8 +144,12 @@ local rseed = 23081980
 	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
 	
 */
+
+* local
+local ps 2 4 10
+*2 3 4 5 6 8 10 15
 	
-foreach p of numlist 4 5 10 {
+foreach p of local ps {
 	local prob = `p'
 	if `p' <= 1 {
 		local ppar = round(`prob'*100)
@@ -163,6 +167,64 @@ foreach p of numlist 4 5 10 {
 	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
 	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
 	}
+
+	* local
+
+	
+	
+foreach p of local ps {
+	local prob = `p'
+	if `p' <= 1 {
+		local ppar = round(`prob'*100)
+	} 
+	else {
+		local ppar = `prob'
+	}
+	local dirbase = "${gsdOutput}/SOM-d`ndiff'm`M'p`ppar'"
+	import delimited "${gsdOutput}/SOM-d`ndiff'm`M'p`ppar'/Out/simc.txt", clear
+	tempfile c`ppar'
+	save `c`ppar''		
+	import delimited "${gsdOutput}/SOM-d`ndiff'm`M'p`ppar'/Out/simp.txt", clear
+	tempfile p`ppar'
+	save `p`ppar''
+}
+
+* merging
+foreach p of local ps {
+	local prob = `p'
+	if `p' <= 1 {
+		local ppar = round(`prob'*100)
+	} 
+	else {
+		local ppar = `prob'
+	}
+	use `c`ppar'', clear
+	merge 1:1 method using `p`ppar'', nogen
+	gen items = `ppar'*2
+	tempfile d`ppar'
+	save `d`ppar''
+}
+* appending
+foreach p of local ps {
+	local prob = `p'
+	if (`p' <= 1) {
+		local ppar = round(`prob'*100)
+	} 
+	else {
+		local ppar = `prob'
+	}
+	if (`: word 1 of `ps''==`p') {
+		use `d`ppar'', clear
+	}
+	else {
+		append using `d`ppar''
+		}
+}
+order method item
+format bias* se* fgt* gini* %9.3f
+list * if method!="red"
+
+save "${gsdOutput}/results", replace
 	
 	
 	dsaDSAD
