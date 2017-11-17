@@ -570,7 +570,7 @@ program define RCS_estimate
 				local sxitem = ""
 				*food
 				foreach id of local sflist {
-					quiet: count if bfitem`id'>0 & ~missing(bfitem`id')
+					quiet: count if bfitem`id'>0 & ~missing(xfitem`id')
 					if (`r(N)'>5) {
 						*include for MI
 						local sxitem "`sxitem' xfitem`id'"
@@ -587,7 +587,7 @@ program define RCS_estimate
 				}
 				*nonfood
 				foreach id of local snflist {
-					quiet: count if bnfitem`id'>0 & ~missing(bnfitem`id')
+					quiet: count if bnfitem`id'>0 & ~missing(xnfitem`id')
 					if (`r(N)'>5) {
 						*include for MI
 						local sxitem "`sxitem' xnfitem`id'"
