@@ -524,15 +524,15 @@ program define RCS_estimate
 			*prepare variables
 			quiet: gen xcons_pc = .
 			quiet: gen xfcons_pc = .
-			quiet: foreach v of varlist xfcons?_pc xnfcons?_pc xdurables_pc {
+			foreach v of varlist xfcons?_pc xnfcons?_pc xdurables_pc {
 				*save original
-				gen o`v' = `v'
+				quiet: gen o`v' = `v'
 				*remove outliers
-				summ `v',d
-				replace `v'= `r(p99)' if (`v'>`r(p99)') & (`v'<.)
+				quiet: summ `v',d
+				quiet: replace `v'= `r(p99)' if (`v'>`r(p99)') & (`v'<.)
 				*log transform
-				gen ln`v' = log(`v')
-				replace ln`v' = log(.1) if `v'==0
+				quiet: gen ln`v' = log(`v')
+				quiet: replace ln`v' = log(.1) if `v'==0
 			}
 			*method selection
 			local mipre = ""
@@ -553,6 +553,71 @@ program define RCS_estimate
 					replace xnfcons`imod'_pc = avg_xnfcons`imod'_pc if xnfcons`imod'_pc>=.
 				}
 				drop avg_x*
+			}
+			else if ("`smethod'"=="ritem_mi") {
+				local mipre = "mi passive: "
+				*get IDs for food and non-food items
+				local sflist = ""
+				foreach v of varlist xfitem* {
+					local sflist "`sflist' `:subinstr local v "xfitem" ""'"
+				}
+				local snflist = ""
+				foreach v of varlist xnfitem* {
+					local snflist "`snflist' `:subinstr local v "xnfitem" ""'"
+				}
+				*collect items with sufficient observations
+				local sbitem = ""
+				local sxitem = ""
+				*food
+				foreach id of local sflist {
+					quiet: count if bfitem`id'>0 & ~missing(bfitem`id')
+					if (`r(N)'>5) {
+						*include for MI
+						local sxitem "`sxitem' xfitem`id'"
+						quiet: replace xfitem`id' = . if missing(xfitem`id')
+						local sbitem "`sbitem' bfitem`id'"
+					}
+					else {
+						*excluded from MI, replace with average if necessary
+						quiet: summ xfitem`id' if bfitem`id'==1
+						if (`r(N)'>0) {
+							quiet: replace xfitem`id' = `r(mean)' if bfitem`id'==1 & missing(xfitem`id')
+						}
+					}
+				}
+				*nonfood
+				foreach id of local snflist {
+					quiet: count if bnfitem`id'>0 & ~missing(bnfitem`id')
+					if (`r(N)'>5) {
+						*include for MI
+						local sxitem "`sxitem' xnfitem`id'"
+						quiet: replace xnfitem`id' = . if missing(xnfitem`id')
+						local sbitem "`sbitem' bnfitem`id'"
+					} 
+					else {
+						*excluded from MI, replace with average if necessary
+						quiet: summ xnfitem`id' if bnfitem`id'==1
+						if (`r(N)'>0) {
+							quiet: replace xnfitem`id' = `r(mean)' if bnfitem`id'==1 & missing(xnfitem`id')
+						}
+					}
+				}
+				
+				*run MI
+				mi set wide
+				mi register imputed `sxitem'
+				mi register regular `sbitem'
+				mi register regular hh* cluster strata pchild psenior xdurables_pc
+				mi register passive xcons_pc xfcons_pc xfcons1_pc xnfcons1_pc
+				mi impute chained (regress) `sxitem' = `sbitem' i.pxdurables_pc `model', add(`nI') report
+				`mipre' egen aux_xfcons1 = rowtotal(xfitem*)
+				`mipre' egen aux_xnfcons1 = rowtotal(xnfitem*)
+				`mipre' replace xfcons1_pc = aux_xfcons1/hhsize
+				`mipre' replace xnfcons1_pc = aux_xnfcons1/hhsize
+				drop aux*
+				* don't use originals
+				replace oxfcons1_pc = .
+				replace oxnfcons1_pc = .
 			}
 			else if ("`smethod'"=="ritem_avg") {
 				* initial variable list
@@ -812,15 +877,15 @@ program define RCS_estimate
 				}
 			}
 			if (substr("`smethod'",1,5)!="ritem") {
-			*build aggregates; but replace with originals if available
-			quiet: `mipre' replace xcons_pc = xdurables_pc
-			quiet: foreach v of varlist xfcons?_pc xnfcons?_pc {
-				`mipre' replace xcons_pc = xcons_pc + o`v' if ~missing(o`v')
-				`mipre' replace xcons_pc = xcons_pc + `v' if missing(o`v')
-				}
+				*build aggregates; but replace with originals if available
+				quiet: `mipre' replace xcons_pc = xdurables_pc
+				quiet: foreach v of varlist xfcons?_pc xnfcons?_pc {
+					`mipre' replace xcons_pc = xcons_pc + o`v' if ~missing(o`v')
+					`mipre' replace xcons_pc = xcons_pc + `v' if missing(o`v')
+					}
 			}
 			else if (substr("`smethod'",1,5)=="ritem") {
-			replace xcons_pc = xfcons1_pc + xnfcons1_pc + xdurables_pc
+				`mipre' replace xcons_pc = xfcons1_pc + xnfcons1_pc + xdurables_pc
 			}
 			*estimate total consumption
 			drop bnfitem* bfitem*
@@ -882,7 +947,7 @@ program define RCS_collate
 				}
 				file write fh _n
 			}
-			else if inlist("`smethod'","MImvn","MIchain","MICE","MImvn2") {
+			else if inlist("`smethod'","MImvn","MIchain","MICE","MImvn2","ritem_mi") {
 				*extract imputations
 				forvalues iter=1/`nI' {
 					use "`lc_sdTemp'/sim_`smethod'_`isim'.dta", clear
