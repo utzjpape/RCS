@@ -10,6 +10,7 @@ local sData = "${gsdDataBox}/SOM-SLHS13"
 
 *leave blank for Somaliland and add suffix for Hergeize like _Hergeiza
 local bH = "_Hergeiza"
+local bH = ""
 
 *DEFLATOR to divide nominal expenditures by and poverty line for urban Hargeiza
 *in 2011, $1 USD PPP was worth 10,731 Somali Shillings PPP, & general inflation in Somaliland from 2011 to 2013 was 58.4%
@@ -18,8 +19,8 @@ local bH = "_Hergeiza"
 *then we convert to USD using an average exchange rate of 20,360.53 Somali Shillings per USD in 2013, that is $1.5861 USD PPP (2013 Somaliland prices)
 *to finally convert to Somaliland Shillings using an average exchange rate of 6,733.69 Somaliland Shillings per USD in 2013, which gives us a poverty line of 10,680.11 Somaliland Shillings PPP (2013 Somaliland prices) per person per day, equivalent to $1.90 USD PPP (2011) 
 local xpovline = 10680.1112312 * .9387317 / (1000 * 12 / 365)
-*for Hergeiza calculation, we use the zupper national poverty line
-local xpovline_Hergeiza = "207.2878"
+*for Hergeiza calculation, we use the zupper national poverty line (not used)
+*local xpovline_Hergeiza = "207.2878"
 
 include "${gsdDo}/fRCS.do"
 
@@ -44,9 +45,14 @@ save "${gsdTemp}/SLD-HH-NonFoodItems.dta", replace
 *get confidence interval for poverty
 *USE rpce 
 *IPL FGT0 should be rural 69 (2013) to 64 (2016) and urban 57 (2013) to 52 (2016)
+* with Hergeiza being 57 (2013)
 use "`sData'/wfilez.dta", clear
+*check if Hergeiza only
+if ("`bH'"!="") {
+	drop if strata !=1
+}
 svyset cluster [pweight=weight]
-gen poor = rpce < `xpovline`bH''
+gen poor = rpce < `xpovline'
 mean poor [pweight=weight*hsize], over(urban)
 *graph food share
 gen x = rfood_pc + rnonfood_pc
@@ -123,7 +129,7 @@ local using= "${gsdData}/SLD`bH'-HHData.dta"
 local ncoref = 33
 local ncorenf = 25
 local ndiff=`ndiff'
-local povline = `xpovline`bH'' 
+local povline = `xpovline' 
 local lmethod = "`lmethod'"
 local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood urban"
 local dirbase = "${gsdOutput}/SLD`bH'-d`ndiff'm`nmodules'"
