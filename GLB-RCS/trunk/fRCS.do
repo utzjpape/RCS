@@ -939,7 +939,7 @@ program define RCS_collate
 				file write fh _n
 			}
 			*estimations
-			if inlist("`smethod'","ritem_avg","ritem_med","reg","tobit","ritem_ols_log","ritem_ols_lin","ritem_ols_lin_fe","ritem_parx_lin") {
+			if inlist("`smethod'","avg","med","reg","tobit") | inlist("`smethod'","ritem_avg","ritem_med","ritem_ols_log","ritem_ols_lin","ritem_ols_lin_fe","ritem_parx_lin") {
 				file write fh "`isim'" _tab "1"
 				foreach id of local xhh {
 					quiet: summ xcons_pc if hhid==`id'
