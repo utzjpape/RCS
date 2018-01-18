@@ -1140,6 +1140,53 @@ program define RCS_analyze
 		graph export "`lc_sdOut'/`sind'.png", replace
 		graph drop `gl_`sind'' cmb_`sind'
 	}
+
+	*analyze FGT0 bias with range of poverty lines
+	*write output file
+	capture: file close fh
+	file open fh using "`lc_sdOut'/simfgt0.txt", replace write
+	file write fh "Method"
+	*add poverty lines to header
+	forvalues rx = 1/100 {
+		file write fh _tab "`rx'"
+	}
+	file write fh _n
+	*obtain poverty lines
+	use "`lc_sdTemp'/simd_`: word 1 of `lmethod''_imp.dta", clear
+	_pctile ref if simulation==1 & imputation==1 [pweight=weight], nq(100)
+	forvalues i = 1/100 {
+		local pline`i' = r(r`i')
+	}
+	replace hhid = hhid * 100 + imputation
+	drop imputation		
+	*calculate FGT0 for list of poverty lines for ref and red
+	foreach v of var ref red {
+		file write fh "`v'"
+		*iterate over poverty lines
+		forvalues i = 1/100 {
+			gen x = `v' < `pline`i'' if `v'<.
+			quiet: mean x [pw=weight]
+			local z = _b[x]
+			file write fh _tab "`z'"
+			drop x
+		}
+		file write fh _n
+	}
+	*and now for remaining methods
+	foreach smethod of local lmethod {
+		file write fh "`smethod'"
+		use "`lc_sdTemp'/simd_`smethod'_imp.dta", clear
+		*iterate over poverty lines
+		forvalues i = 1/100 {
+			gen x = est < `pline`i'' if est<.
+			quiet: mean x [pw=weight]
+			local z = _b[x]
+			file write fh _tab "`z'"
+			drop x
+		}
+		file write fh _n
+	}
+	file close fh
 end
 	
 capture: program drop RCS_run
