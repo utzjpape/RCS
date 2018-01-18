@@ -1075,7 +1075,8 @@ program define RCS_analyze
 	file write fh "red"
 	*prepare dataset
 	use "`lc_sdTemp'/simd_`: word 1 of `lmethod''_imp.dta", clear
-	replace hhid = hhid * 100 + imputation
+	quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+	quiet: replace hhid = hhid * 100 + imputation
 	drop imputation
 	*calculate poverty indices and gini
 	foreach v of var red ref {
@@ -1088,9 +1089,9 @@ program define RCS_analyze
 		gen `v'_fgt2 = `v'_fgt1^2
 		drop i n
 	}
-	collapse (mean) red* ref* (count) n=hhid [aweight=weight], by(simulation)
-	replace ref_gini = (n+1-2*ref_gini / ref) / n
-	replace red_gini = (n+1-2*red_gini / red) / n
+	collapse (mean) red* ref* (count) n=hhid [pweight=weight*hhsize], by(simulation)
+	quiet: replace ref_gini = (n+1-2*ref_gini / ref) / n
+	quiet: replace red_gini = (n+1-2*red_gini / red) / n
 	drop n
 	quiet: foreach sind of local lind {
 		quiet: summ ref_`sind'
@@ -1104,7 +1105,8 @@ program define RCS_analyze
 		file write fh "`smethod'"
 		*prepare dataset
 		use "`lc_sdTemp'/simd_`smethod'_imp.dta", clear
-		replace hhid = hhid * 100 + imputation
+		quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+		quiet: replace hhid = hhid * 100 + imputation
 		drop imputation
 		*calculate poverty indices and gini
 		foreach v of var est ref {
@@ -1117,9 +1119,9 @@ program define RCS_analyze
 			gen `v'_fgt2 = `v'_fgt1^2
 			drop i n
 		}
-		collapse (mean) est* ref* (count) n=hhid [aweight=weight], by(simulation)
-		replace ref_gini = (n+1-2*ref_gini / ref) / n
-		replace est_gini = (n+1-2*est_gini / est) / n
+		collapse (mean) est* ref* (count) n=hhid [pweight=weight*hhsize], by(simulation)
+		quiet: replace ref_gini = (n+1-2*ref_gini / ref) / n
+		quiet: replace est_gini = (n+1-2*est_gini / est) / n
 		drop n
 		*make histograms
 		quiet: foreach sind of local lind {
@@ -1142,6 +1144,7 @@ program define RCS_analyze
 	}
 
 	*analyze FGT0 bias with range of poverty lines
+	di "Analyze FGT0 bias for each percentile..."
 	*write output file
 	capture: file close fh
 	file open fh using "`lc_sdOut'/simfgt0.txt", replace write
@@ -1153,11 +1156,12 @@ program define RCS_analyze
 	file write fh _n
 	*obtain poverty lines
 	use "`lc_sdTemp'/simd_`: word 1 of `lmethod''_imp.dta", clear
-	_pctile ref if simulation==1 & imputation==1 [pweight=weight], nq(100)
+	quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+	_pctile ref if simulation==1 & imputation==1 [pweight=weight*hhsize], nq(100)
 	forvalues i = 1/100 {
 		local pline`i' = r(r`i')
 	}
-	replace hhid = hhid * 100 + imputation
+	quiet: replace hhid = hhid * 100 + imputation
 	drop imputation		
 	*calculate FGT0 for list of poverty lines for ref and red
 	foreach v of var ref red {
@@ -1165,7 +1169,7 @@ program define RCS_analyze
 		*iterate over poverty lines
 		forvalues i = 1/100 {
 			gen x = `v' < `pline`i'' if `v'<.
-			quiet: mean x [pw=weight]
+			quiet: mean x [pw=weight*hhsize]
 			local z = _b[x]
 			file write fh _tab "`z'"
 			drop x
@@ -1174,12 +1178,14 @@ program define RCS_analyze
 	}
 	*and now for remaining methods
 	foreach smethod of local lmethod {
+		di "... `smethod' ..."
 		file write fh "`smethod'"
 		use "`lc_sdTemp'/simd_`smethod'_imp.dta", clear
+		quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
 		*iterate over poverty lines
 		forvalues i = 1/100 {
 			gen x = est < `pline`i'' if est<.
-			quiet: mean x [pw=weight]
+			quiet: mean x [pw=weight*hhsize]
 			local z = _b[x]
 			file write fh _tab "`z'"
 			drop x
