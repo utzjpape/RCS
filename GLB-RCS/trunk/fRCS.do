@@ -28,9 +28,14 @@ program define fse, rclass
 end
 
 *prepare items in wide format, adding zeros for missings and conserving labels
+* parameters:
+*   hhid: unique identifier for households
+*   itemid: unique identifier for items
+*   value: variable capturing the value of consumption
+*   [REDuced]: number of items to include in the final dataset (scaled to approx sum up to total consumption)
 capture: program drop fItems2RCS
 program define fItems2RCS
-	syntax , hhid(varname) itemid(varname) value(varname)
+	syntax , hhid(varname) itemid(varname) value(varname) [REDuced(integer 0)]
 	* save the value labels for variables in local list
 	quiet: levelsof `itemid', local(`itemid'_levels)
 	foreach val of local `itemid'_levels {
@@ -41,9 +46,32 @@ program define fItems2RCS
 	foreach v of varlist `value'* {
 		quiet: replace `v'=0 if `v'>=.
 	}
+	*reduce dataset if needed
+	quiet: if (`reduced'>0) {
+		*work in long dataset (but need zero values)
+		reshape long `value', i(`hhid') j(`itemid')
+		bysort `hhid': egen xt = total(`value')
+		gen pt = `value' / xt
+		bysort `itemid': egen ppt = mean(pt)
+		egen r = rank(ppt)
+		replace r= -r
+		egen rr = group(r)
+		*calculate scaling factor (is done in constant multiples of households)
+		egen scale = total(ppt) if rr > `reduced'
+		egen xscale = total(ppt)
+		gen x = scale/xscale
+		egen xfactor = mean(x)
+		drop if rr > `reduced'
+		replace `value' = `value' / xfactor
+		quiet: summ xfactor
+		local xf = 1-r(mean)
+		drop xt pt ppt r rr scale x xscale xfactor
+		reshape wide `value', i(`hhid') j(`itemid')
+	}
+	if (`reduced'>0) di "Reduced consumption items to `reduced' item, capturing `xf' of consumption."
 	*reinstantiate labels
 	foreach val of local `itemid'_levels {
-		label var `value'`val' "``itemid'_`val''"
+		capture: label var `value'`val' "``itemid'_`val''"
 	}
 end
 
@@ -272,6 +300,7 @@ program define RCS_partition
 		quiet: replace itemred = 1 if `itemid' == `id'
 	}
 end
+
 
 capture: program drop RCS_prepare
 program define RCS_prepare
@@ -553,6 +582,49 @@ program define RCS_estimate
 					replace xnfcons`imod'_pc = avg_xnfcons`imod'_pc if xnfcons`imod'_pc>=.
 				}
 				drop avg_x*
+			}
+			else if ("`smethod'"=="ritem_ujp") {
+				* initial variable list
+				qui ds
+				local all_vars `r(varlist)'
+				* renaming					
+				rename xfitem* x1*
+				rename xnfitem* x2*
+				rename bfitem* b1*
+				rename bnfitem* b2* 
+				* reshape to long format
+				qui reshape long x b, i(hhid) j(item)
+				gen food = item<2000
+				* total number of items consumed per category (food - nonfood) and number evaluated
+				egen nc = sum(b), by(hhid food)
+				egen ne = sum(x>0 & ~missing(x)), by(hhid food)
+				* total items consumed
+				egen nt = sum(b), by(hhid) 
+				* weigh
+				gen w = (nc/ne)*weight
+				* per capita value
+				gen y = x/hhsize
+				* estimate, predict, impute
+				quiet reg y [pw=w] if b==1 & ~missing(x)
+				*predict xb, xb
+				replace x = _b[_cons]*hhsize if b==1 & missing(x)
+				drop food nc ne w y
+				qui reshape wide x b, i(hhid) j(item)
+				rename x1* xfitem*
+				rename x2* xnfitem*
+				rename b1* bfitem*
+				rename b2* bnfitem*
+				* keep only original variables
+				keep `all_vars' 
+				* totals
+				egen aux_xfcons1 = rowtotal(xfitem*)
+				egen aux_xnfcons1 = rowtotal(xnfitem*)
+				replace xfcons1_pc = aux_xfcons1/hhsize
+				replace xnfcons1_pc = aux_xnfcons1/hhsize
+				drop aux*
+				* don't use originals
+				replace oxfcons1_pc = .
+				replace oxnfcons1_pc = .
 			}
 			else if ("`smethod'"=="ritem_mi") {
 				local mipre = "mi passive: "
@@ -885,7 +957,7 @@ program define RCS_estimate
 					}
 			}
 			else if (substr("`smethod'",1,5)=="ritem") {
-				`mipre' replace xcons_pc = xfcons1_pc + xnfcons1_pc + xdurables_pc
+				`mipre' replace xcons_pc = xfcons0_pc + xfcons1_pc + xnfcons0_pc + xnfcons1_pc + xdurables_pc
 			}
 			*estimate total consumption
 			drop bnfitem* bfitem*
@@ -939,7 +1011,7 @@ program define RCS_collate
 				file write fh _n
 			}
 			*estimations
-			if inlist("`smethod'","avg","med","reg","tobit") | inlist("`smethod'","ritem_avg","ritem_med","ritem_ols_log","ritem_ols_lin","ritem_ols_lin_fe","ritem_parx_lin") {
+			if inlist("`smethod'","avg","med","reg","tobit") | inlist("`smethod'","ritem_ujp") | inlist("`smethod'","ritem_avg","ritem_med","ritem_ols_log","ritem_ols_lin","ritem_ols_lin_fe","ritem_parx_lin") {
 				file write fh "`isim'" _tab "1"
 				foreach id of local xhh {
 					quiet: summ xcons_pc if hhid==`id'
@@ -960,6 +1032,7 @@ program define RCS_collate
 					file write fh _n
 				}
 			}
+			else di as error "Error: Method `smethod' not found in fRCS::RCS_collate."
 		}	
 		file close fh
 		*prepare stata file

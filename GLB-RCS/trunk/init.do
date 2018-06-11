@@ -13,7 +13,7 @@ set sortseed 11041955
 
 if (inlist("${suser}","wb390290","WB390290")) {
 	*Utz
-	if ("`c(hostname)'"=="WIN-82M1NHB392O") {
+	if inlist("`c(hostname)'","WIN-82M1NHB392O","wbgmsutz0318") {
 		*on virtual machine
 		local swdLocal = "D:\SV-RCS"
 		*Box directory where the Data folder can be located

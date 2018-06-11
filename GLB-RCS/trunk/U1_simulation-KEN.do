@@ -32,7 +32,7 @@ egen xfood = rowtotal(i04k i05k i05ak i06k i07k)
 replace xfood = xfood / 7 / fpindex if xfood<.
 keep hhid foodid xfood
 collapse (sum) xfood, by(hhid foodid)
-fItems2RCS, hhid(hhid) itemid(foodid) value(xfood)
+fItems2RCS, hhid(hhid) itemid(foodid) value(xfood) red(10)
 save "${gsdTemp}/KEN-HH-FoodItems.dta", replace
 *non food consumption
 use "`sData'/Section JKL Regular Non Food Items.dta", clear
@@ -44,7 +44,7 @@ ren j02 nonfoodid
 gen xnonfood = (j03k + j04k) * 12 / 365.25 / fpindex
 keep hhid nonfoodid xnonfood
 collapse (sum) xnonfood, by(hhid nonfoodid)
-fItems2RCS, hhid(hhid) itemid(nonfoodid) value(xnonfood)
+fItems2RCS, hhid(hhid) itemid(nonfoodid) value(xnonfood) red(10)
 save "${gsdTemp}/KEN-HH-NonFoodItems.dta", replace
 
 *get household characteristics
@@ -102,20 +102,20 @@ mean poor [pweight=weight*hhsize], over(strata)
 local model = "hhsize pchild psenior i.hhsex i.hhtoilet i.hhtenure i.hhhouse i.hhcook hhrooms i.strata"
 reg y2_i `model'
 *number of modules
-local nmodules = 4
+local nmodules = 1
 *number of simulations (should be 20)
-local nsim = 20
+local nsim = 5
 *number of imputations (should be 50)
 local nmi = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
 local ndiff = 3
 *methods
-local lmethod = "med avg reg tobit MICE MImvn"
+local lmethod = "ritem_ujp"
 *other parameters
 local using= "${gsdData}/KEN-HHData.dta"
 local dirbase = "${gsdOutput}/KEN-d`ndiff'm`nmodules'"
-local ncoref = 30
-local ncorenf = 25
+local ncoref = 5
+local ncorenf = 5
 local ndiff=`ndiff'
 local povline = `xpovline'
 local lmethod = "`lmethod'"
