@@ -23,6 +23,8 @@ local xpovline = 10680.1112312 * .9387317 / (1000 * 12 / 365)
 local xpovline_Hergeiza = "207.2878"
 
 include "${gsdDo}/fRCS.do"
+include "${gsdDo}/fRCS_estimate_.do"
+include "${gsdDo}/fRCS_estimate_mi_.do"
 
 *CREATE MODULES 
 *for validation of the method, missing data is assumed to be missing
@@ -119,7 +121,7 @@ local nmi = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
 local ndiff = 3
 *methods
-local lmethod = "med avg reg tobit MICE MImvn"
+local lmethod = "med avg reg tobit mi_ce mi_mvn"
 local using= "${gsdData}/SLD`bH'-HHData.dta"
 local ncoref = 33
 local ncorenf = 25

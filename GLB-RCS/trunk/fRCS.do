@@ -312,8 +312,15 @@ program define RCS_prepare
 	local lc_sdOut = "`dirbase'/Out"
 	capture: mkdir "`lc_sdOut'"
 	
-	*create food and non-food files
 	use "`using'", clear
+	*make hhid sequential
+	sort hhid
+	egen hhidx = seq()
+	drop hhid
+	ren hhidx hhid
+	order hhid, first
+	save "`using'", replace
+	*create food and non-food files
 	keep hhid hhsize weight xfood*
 	*get labels
 	capture: label drop lfood
@@ -530,6 +537,7 @@ program define RCS_mask
 	}
 end
 
+*will call RCS_estimate_`smethod' defined in fRCS_estimate_.do
 capture: program drop RCS_estimate
 program define RCS_estimate
 	syntax using/, dirbase(string) nmodules(integer) nsim(integer) nmi(integer) lmethod(namelist) model(string) rseed(integer)
@@ -539,15 +547,13 @@ program define RCS_estimate
 	local N = `nsim'
 	local M = `nmodules'
 	local nI = `nmi'
-
 	set seed `rseed'
-	
 	*start iteration over simulations
 	forvalues isim = 1 / `N' {
 		*ESTIMATE BASED ON DIFFERENT METHODS
 		foreach smethod of local lmethod {
 			*change directory to make sure we are in a writable directory for some mi commands
-			cd "`lc_sdTemp'"
+			quiet: cd "`lc_sdTemp'"
 			*load prepared dataset for mi
 			use "`lc_sdTemp'/mi_`isim'.dta", clear
 			*prepare variables
@@ -565,399 +571,15 @@ program define RCS_estimate
 			}
 			*method selection
 			local mipre = ""
-			if ("`smethod'"=="avg") {
-				quiet: forvalues imod = 1/`M' {
-					egen avg_xfcons`imod'_pc = mean(xfcons`imod'_pc)
-					replace xfcons`imod'_pc = avg_xfcons`imod'_pc if xfcons`imod'_pc>=.
-					egen avg_xnfcons`imod'_pc = mean(xnfcons`imod'_pc)
-					replace xnfcons`imod'_pc = avg_xnfcons`imod'_pc if xnfcons`imod'_pc>=.
-				}
-				drop avg_x*
-			}
-			else if ("`smethod'"=="med") {
-				quiet: forvalues imod = 1/`M' {
-					egen avg_xfcons`imod'_pc = median(xfcons`imod'_pc)
-					replace xfcons`imod'_pc = avg_xfcons`imod'_pc if xfcons`imod'_pc>=.
-					egen avg_xnfcons`imod'_pc = median(xnfcons`imod'_pc)
-					replace xnfcons`imod'_pc = avg_xnfcons`imod'_pc if xnfcons`imod'_pc>=.
-				}
-				drop avg_x*
-			}
-			else if ("`smethod'"=="ritem_ujp") {
-				* initial variable list
-				qui ds
-				local all_vars `r(varlist)'
-				* renaming					
-				rename xfitem* x1*
-				rename xnfitem* x2*
-				rename bfitem* b1*
-				rename bnfitem* b2* 
-				* reshape to long format
-				qui reshape long x b, i(hhid) j(item)
-				gen food = item<2000
-				* total number of items consumed per category (food - nonfood) and number evaluated
-				egen nc = sum(b), by(hhid food)
-				egen ne = sum(x>0 & ~missing(x)), by(hhid food)
-				* total items consumed
-				egen nt = sum(b), by(hhid) 
-				* weigh
-				gen w = (nc/ne)*weight
-				* per capita value
-				gen y = x/hhsize
-				* estimate, predict, impute
-				quiet reg y [pw=w] if b==1 & ~missing(x)
-				*predict xb, xb
-				replace x = _b[_cons]*hhsize if b==1 & missing(x)
-				drop food nc ne w y
-				qui reshape wide x b, i(hhid) j(item)
-				rename x1* xfitem*
-				rename x2* xnfitem*
-				rename b1* bfitem*
-				rename b2* bnfitem*
-				* keep only original variables
-				keep `all_vars' 
-				* totals
-				egen aux_xfcons1 = rowtotal(xfitem*)
-				egen aux_xnfcons1 = rowtotal(xnfitem*)
-				replace xfcons1_pc = aux_xfcons1/hhsize
-				replace xnfcons1_pc = aux_xnfcons1/hhsize
-				drop aux*
-				* don't use originals
-				replace oxfcons1_pc = .
-				replace oxnfcons1_pc = .
-			}
-			else if ("`smethod'"=="ritem_mi") {
-				local mipre = "mi passive: "
-				*get IDs for food and non-food items
-				local sflist = ""
-				foreach v of varlist xfitem* {
-					local sflist "`sflist' `:subinstr local v "xfitem" ""'"
-				}
-				local snflist = ""
-				foreach v of varlist xnfitem* {
-					local snflist "`snflist' `:subinstr local v "xnfitem" ""'"
-				}
-				*collect items with sufficient observations
-				local sbitem = ""
-				local sxitem = ""
-				*food
-				foreach id of local sflist {
-					quiet: count if bfitem`id'>0 & ~missing(xfitem`id')
-					if (`r(N)'>5) {
-						*include for MI
-						local sxitem "`sxitem' xfitem`id'"
-						quiet: replace xfitem`id' = . if missing(xfitem`id')
-						local sbitem "`sbitem' bfitem`id'"
-					}
-					else {
-						*excluded from MI, replace with average if necessary
-						quiet: summ xfitem`id' if bfitem`id'==1
-						if (`r(N)'>0) {
-							quiet: replace xfitem`id' = `r(mean)' if bfitem`id'==1 & missing(xfitem`id')
-						}
-					}
-				}
-				*nonfood
-				foreach id of local snflist {
-					quiet: count if bnfitem`id'>0 & ~missing(xnfitem`id')
-					if (`r(N)'>5) {
-						*include for MI
-						local sxitem "`sxitem' xnfitem`id'"
-						quiet: replace xnfitem`id' = . if missing(xnfitem`id')
-						local sbitem "`sbitem' bnfitem`id'"
-					} 
-					else {
-						*excluded from MI, replace with average if necessary
-						quiet: summ xnfitem`id' if bnfitem`id'==1
-						if (`r(N)'>0) {
-							quiet: replace xnfitem`id' = `r(mean)' if bnfitem`id'==1 & missing(xnfitem`id')
-						}
-					}
-				}
-				
-				*run MI
-				mi set wide
-				mi register imputed `sxitem'
-				mi register regular `sbitem'
-				mi register regular hh* cluster strata pchild psenior xdurables_pc
-				mi register passive xcons_pc xfcons_pc xfcons1_pc xnfcons1_pc
-				mi impute chained (regress) `sxitem' = `sbitem' i.pxdurables_pc `model', add(`nI') report
-				`mipre' egen aux_xfcons1 = rowtotal(xfitem*)
-				`mipre' egen aux_xnfcons1 = rowtotal(xnfitem*)
-				`mipre' replace xfcons1_pc = aux_xfcons1/hhsize
-				`mipre' replace xnfcons1_pc = aux_xnfcons1/hhsize
-				drop aux*
-				* don't use originals
-				replace oxfcons1_pc = .
-				replace oxnfcons1_pc = .
-			}
-			else if ("`smethod'"=="ritem_avg") {
-				* initial variable list
-				qui ds
-				local all_vars `r(varlist)'
-				* renaming					
-				rename xfitem* x1*
-				rename xnfitem* x2*
-				rename bfitem* b1*
-				rename bnfitem* b2* 
-				* reshape to long format
-				qui reshape long x b, i(hhid) j(item)
-				gen food = item<2000
-				* total number of items consumed per category (food - nonfood) and number evaluated
-				egen nc = sum(b), by(hhid food)
-				egen ne = sum(x>0 & ~missing(x)), by(hhid food)
-				* total items consumed
-				egen nt = sum(b), by(hhid) 
-				* weigh
-				gen w = (nc/ne)*weight
-				* per capita value
-				gen y = x/hhsize
-				* estimate, predict, impute
-				quiet reg y [pw=w] if b==1 & ~missing(x)
-				*predict xb, xb
-				replace x = _b[_cons]*hhsize if b==1 & missing(x)
-				drop food nc ne w y
-				qui reshape wide x b, i(hhid) j(item)
-				rename x1* xfitem*
-				rename x2* xnfitem*
-				rename b1* bfitem*
-				rename b2* bnfitem*
-				* keep only original variables
-				keep `all_vars' 
-				* totals
-				egen aux_xfcons1 = rowtotal(xfitem*)
-				egen aux_xnfcons1 = rowtotal(xnfitem*)
-				replace xfcons1_pc = aux_xfcons1/hhsize
-				replace xnfcons1_pc = aux_xnfcons1/hhsize
-				drop aux*
-				* don't use originals
-				replace oxfcons1_pc = .
-				replace oxnfcons1_pc = .
-			}
-			else if ("`smethod'"=="ritem_med") {
-				* initial variable list
-				qui ds
-				local all_vars `r(varlist)'
-				* renaming					
-				rename xfitem* x1*
-				rename xnfitem* x2*
-				rename bfitem* b1*
-				rename bnfitem* b2* 
-				* reshape to long format
-				qui reshape long x b, i(hhid) j(item)
-				gen food = item<2000
-				* total number of items consumed per category (food - nonfood) and number evaluated
-				egen nc = sum(b), by(hhid food)
-				egen ne = sum(x>0 & ~missing(x)), by(hhid food)
-				* total items consumed
-				egen nt = sum(b), by(hhid) 
-				* weight
-				gen w = (nc/ne)*weight
-				* per capita value
-				gen y = x/hhsize
-				* estimate, predict, impute
-				egen aux_xb = median(y) if b==1 & ~missing(x), by(hhid food)
-				egen xb = mean(aux_xb), by(hhid food)
-				drop aux*
-				*quiet reg y i.hhid##i.food if b==1 & ~missing(x)
-				*predict xb, xb
-				replace x = xb*hhsize if b==1 & missing(x)
-				drop food nc ne w y xb nt 
-				qui reshape wide x b, i(hhid) j(item)
-				rename x1* xfitem*
-				rename x2* xnfitem*
-				rename b1* bfitem*
-				rename b2* bnfitem*
-				* keep only original variables
-				keep `all_vars' 
-				* totals
-				egen aux_xfcons1 = rowtotal(xfitem*)
-				egen aux_xnfcons1 = rowtotal(xnfitem*)
-				replace xfcons1_pc = aux_xfcons1/hhsize
-				replace xnfcons1_pc = aux_xnfcons1/hhsize
-				drop aux*
-				* don't use originals
-				replace oxfcons1_pc = .
-				replace oxnfcons1_pc = .
-			}
-			else if ("`smethod'"=="ritem_ols_lin_fe") {
-				* initial variable list
-				qui ds
-				local all_vars `r(varlist)'
-				* renaming					
-				rename xfitem* x1*
-				rename xnfitem* x2*
-				rename bfitem* b1*
-				rename bnfitem* b2* 
-				* reshape to long format
-				qui reshape long x b, i(hhid) j(item)
-				gen food = item<2000
-				* total number of items consumed per category (food - nonfood) and number evaluated
-				egen nc = sum(b), by(hhid food)
-				egen ne = sum(x>0 & ~missing(x)), by(hhid food)
-				* total items consumed
-				egen nt = sum(b), by(hhid) 
-				* weight
-				gen w = (nc/ne)*weight
-				* per capita value
-				gen y = x/hhsize
-				* estimate, predict, impute
-				quiet reg y i.hhid##i.food if b==1 & ~missing(x)
-				predict xb, xb
-				replace x = xb*hhsize if b==1 & missing(x)
-				drop food nc ne w y xb nt 
-				qui reshape wide x b, i(hhid) j(item)
-				rename x1* xfitem*
-				rename x2* xnfitem*
-				rename b1* bfitem*
-				rename b2* bnfitem*
-				* keep only original variables
-				keep `all_vars' 
-				* totals
-				egen aux_xfcons1 = rowtotal(xfitem*)
-				egen aux_xnfcons1 = rowtotal(xnfitem*)
-				replace xfcons1_pc = aux_xfcons1/hhsize
-				replace xnfcons1_pc = aux_xnfcons1/hhsize
-				drop aux*
-				* don't use originals
-				replace oxfcons1_pc = .
-				replace oxnfcons1_pc = .
-			}
-			else if ("`smethod'"=="ritem_parx_log") {
-				qui ds
-				local all_vars `r(varlist)'
-				* reshape to long format
-				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
-				* original yes/no
-				gen obfitem = bfitem
-				gen obnfitem = bnfitem 
-				* no value or zero
-				replace bfitem = 0 if xfitem==.y
-				replace bnfitem = 0 if xnfitem==.y
-				* back to wide format
-				qui reshape wide xfitem xnfitem bfitem bnfitem obfitem obnfitem, i(hhid) j(item)
-				keep `all_vars' obfitem* obnfitem*
-				*partial aggregate
-				egen xpartial = rowtotal(xfitem* xnfitem*) 
-				gen lxpartial = log(xpartial)
-				* estimation
-				qui reg lxpartial `model' bfitem* bnfitem*
-				qui reshape long xfitem xnfitem bfitem bnfitem obfitem obnfitem, i(hhid) j(item)
-				replace bfitem = obfitem
-				replace bnfitem = obnfitem
-				drop obfitem obnfitem
-				qui reshape wide xfitem xnfitem bfitem bnfitem , i(hhid) j(item)
-				keep `all_vars' 
-				predict xb, xb
-				replace xb = exp(xb)
-				* assign zero nonfood consumption
-				replace xfcons1_pc = xb/hhsize
-				replace xnfcons1_pc = 0
-				drop xb  
-				* keep only initial variable list
-				keep `all_vars'
-			}
-		else if ("`smethod'"=="ritem_parx_lin") {
-				qui ds
-				local all_vars `r(varlist)'
-				* reshape to long format
-				qui reshape long xfitem xnfitem bfitem bnfitem, i(hhid) j(item)
-				* original yes/no
-				gen obfitem = bfitem
-				gen obnfitem = bnfitem 
-				* no value or zero
-				replace bfitem = 0 if xfitem==.y
-				replace bnfitem = 0 if xnfitem==.y
-				* back to wide format
-				qui reshape wide xfitem xnfitem bfitem bnfitem obfitem obnfitem, i(hhid) j(item)
-				keep `all_vars' obfitem* obnfitem*
-				*partial aggregate
-				egen xpartial = rowtotal(xfitem* xnfitem*) 
-				* estimation
-				qui reg xpartial `model' bfitem* bnfitem*
-				qui reshape long xfitem xnfitem bfitem bnfitem obfitem obnfitem, i(hhid) j(item)
-				replace bfitem = obfitem
-				replace bnfitem = obnfitem
-				drop obfitem obnfitem
-				qui reshape wide xfitem xnfitem bfitem bnfitem , i(hhid) j(item)
-				keep `all_vars' 
-				predict xb, xb
-				* assign zero nonfood consumption
-				replace xfcons1_pc = xb/hhsize
-				replace xnfcons1_pc = 0
-				drop xb  
-				* keep only initial variable list
-				keep `all_vars'
-			}
-			else if ("`smethod'"=="tobit") {
-				quiet: forvalues imod = 1/`M' {
-					*food
-	*				reg lnxfcons`imod'_pc xfcons0_pc lnxfcons0_pc hhsize pchild i.cluster
-					tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0)
-					predict y`imod'_pc if xfcons`imod'_pc>=.
-	*				replace xfcons`imod'_pc = exp(y`imod'_pc) if xfcons`imod'_pc>=.
-					replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
-					drop y`imod'_pc
-					*non-food
-	*				reg lnxnfcons`imod'_pc xnfcons0_pc lnxnfcons0_pc hhsize pchild i.cluster
-					tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0)
-					predict y`imod'_pc if xnfcons`imod'_pc>=.
-	*				replace xnfcons`imod'_pc = exp(y`imod'_pc) if xnfcons`imod'_pc>=.
-					replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
-					drop y`imod'_pc
-				}
-			}
-			else if ("`smethod'"=="reg") {
-				quiet: forvalues imod = 1/`M' {
-					*food
-	*				reg lnxfcons`imod'_pc xfcons0_pc lnxfcons0_pc hhsize pchild i.cluster
-					reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight]
-					predict y`imod'_pc if xfcons`imod'_pc>=.
-	*				replace xfcons`imod'_pc = exp(y`imod'_pc) if xfcons`imod'_pc>=.
-					replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
-					drop y`imod'_pc
-					*non-food
-	*				reg lnxnfcons`imod'_pc xnfcons0_pc lnxnfcons0_pc hhsize pchild i.cluster
-					reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight]
-					predict y`imod'_pc if xnfcons`imod'_pc>=.
-	*				replace xnfcons`imod'_pc = exp(y`imod'_pc) if xnfcons`imod'_pc>=.
-					replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
-					drop y`imod'_pc
-				}
-			}
-			else {
-				local mipre = "mi passive: "
-				*run MI
-				mi set wide
-				mi register imputed xfcons1_pc xnfcons1_pc xfcons2_pc xnfcons2_pc xfcons3_pc xnfcons3_pc xfcons4_pc xnfcons4_pc
-				mi register regular oxfcons0_pc oxnfcons0_pc oxfcons1_pc oxnfcons1_pc oxfcons2_pc oxnfcons2_pc oxfcons3_pc oxnfcons3_pc oxfcons4_pc oxnfcons4_pc
-				mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc strata pchild psenior cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
-				mi register passive xcons_pc xfcons_pc
-				*MI method selection
-				if ("`smethod'"=="MImvn") {
-					*Multi-variate normal imputation using MCMC
-					mi impute mvn xfcons1_pc xfcons2_pc xfcons3_pc xfcons4_pc xnfcons1_pc xnfcons2_pc xnfcons3_pc xnfcons4_pc = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', add(`nI') burnin(1000)
-				}
-				else if inlist("`smethod'","MIchain","MICE") {
-					*Chained regressions to estimate the joint
-	*				mi impute chained (regress) xfcons1_pc xfcons2_pc xfcons3_pc xfcons4_pc xnfcons1_pc xnfcons2_pc xnfcons3_pc xnfcons4_pc = xfcons0_pc xnfcons0_pc xdurables_pc hhsize pchild psenior i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhmode i.hhplot i.hhfood i.cluster i.hhmod, add(`nI') noimp report
-					mi impute chained (regress) xfcons1_pc xfcons2_pc xfcons3_pc xfcons4_pc xnfcons1_pc xnfcons2_pc xnfcons3_pc xnfcons4_pc = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', add(`nI') report
-				}
-				else {
-					di as error "MI Method `smethod' not known."
-					error 1
-				}
-			}
-			if (substr("`smethod'",1,5)!="ritem") {
-				*build aggregates; but replace with originals if available
-				quiet: `mipre' replace xcons_pc = xdurables_pc
-				quiet: foreach v of varlist xfcons?_pc xnfcons?_pc {
-					`mipre' replace xcons_pc = xcons_pc + o`v' if ~missing(o`v')
-					`mipre' replace xcons_pc = xcons_pc + `v' if missing(o`v')
-					}
-			}
-			else if (substr("`smethod'",1,5)=="ritem") {
-				`mipre' replace xcons_pc = xfcons0_pc + xfcons1_pc + xnfcons0_pc + xnfcons1_pc + xdurables_pc
+			RCS_estimate_`smethod' , nmodules(`nmodules') nsim(`nsim') nmi(`nmi') model("`model'")
+			*check if mi dataset
+			quiet: mi query
+			if "`r(style)'"!="" local mipre = "mi:"
+			*build aggregates; but replace with originals if available
+			quiet: `mipre' replace xcons_pc = xdurables_pc
+			foreach v of varlist xfcons?_pc xnfcons?_pc {
+				quiet: `mipre' replace xcons_pc = xcons_pc + o`v' if ~missing(o`v')
+				quiet: `mipre' replace xcons_pc = xcons_pc + `v' if missing(o`v')
 			}
 			*estimate total consumption
 			drop bnfitem* bfitem*
@@ -983,12 +605,8 @@ program define RCS_collate
 		file open fh using "`lc_sdTemp'/simd_`smethod'.txt", replace write
 		*prepare title
 		use "`lc_sdTemp'/sim_`smethod'_1.dta", clear
-		file write fh "Simulation" _tab "Imputation"
 		quiet: levelsof hhid, local(xhh)
-		foreach id of local xhh {
-			file write fh _tab "hh`id'"
-		}
-		file write fh _n
+		file write fh "Simulation" _tab "Imputation" _tab "hhid" _tab "est" _n
 		*extract consumption
 		forvalues isim = 1/`N' {
 			di "`isim'"
@@ -996,50 +614,41 @@ program define RCS_collate
 			*real and reduced values
 			if (`isim'==1) {
 				*real values
-				file write fh "0" _tab "0"
 				foreach id of local xhh {
 					quiet: summ ccons_pc if hhid==`id'
-					file write fh _tab (r(mean))
+					file write fh "0" _tab "0" _tab "`id'" _tab (r(mean)) _n
 				}
-				file write fh _n
 				*reduced consumption
-				file write fh "-1" _tab "0"
 				foreach id of local xhh {
 					quiet: summ rcons_pc if hhid==`id'
-					file write fh _tab (r(mean))
+					file write fh "-1" _tab "0" _tab "`id'" _tab (r(mean)) _n
 				}
-				file write fh _n
 			}
 			*estimations
-			if inlist("`smethod'","avg","med","reg","tobit") | inlist("`smethod'","ritem_ujp") | inlist("`smethod'","ritem_avg","ritem_med","ritem_ols_log","ritem_ols_lin","ritem_ols_lin_fe","ritem_parx_lin") {
-				file write fh "`isim'" _tab "1"
+			quiet: mi query
+			if ("`r(style)'"=="") {
+				*extract non-mi dataset
 				foreach id of local xhh {
 					quiet: summ xcons_pc if hhid==`id'
-					file write fh _tab (r(mean))
+					file write fh "`isim'" _tab "1" _tab "`id'" _tab (r(mean)) _n
 				}
-				file write fh _n
 			}
-			else if inlist("`smethod'","MImvn","MIchain","MICE","MImvn2","ritem_mi") {
-				*extract imputations
+			else {
+				*extract multiple imputations
 				forvalues iter=1/`nI' {
 					use "`lc_sdTemp'/sim_`smethod'_`isim'.dta", clear
 					mi extract `iter', clear
-					file write fh "`isim'" _tab "`iter'"
 					foreach id of local xhh {
 						quiet: summ xcons_pc if hhid==`id'
-						file write fh _tab (r(mean))
+						file write fh "`isim'" _tab "`iter'" _tab "`id'" _tab (r(mean)) _n
 					}
-					file write fh _n
 				}
 			}
-			else di as error "Error: Method `smethod' not found in fRCS::RCS_collate."
-		}	
+		}
 		file close fh
 		*prepare stata file
 		insheet using "`lc_sdTemp'/simd_`smethod'.txt", clear
 		*summarize imputations for MI
-		quiet: reshape long hh, i(simulation imputation) j(hhid)
-		ren hh est
 		quiet: merge m:1 hhid using "`using'", nogen keep(match) keepusing(weight cluster)
 		*get reference
 		quiet: gen x = est if simulation==0
@@ -1224,7 +833,7 @@ program define RCS_analyze
 	file write fh "Method"
 	*add poverty lines to header
 	forvalues rx = 1/100 {
-		file write fh _tab "`rx'"
+		file write fh _tab "p`rx'"
 	}
 	file write fh _n
 	*obtain poverty lines
@@ -1266,6 +875,10 @@ program define RCS_analyze
 		file write fh _n
 	}
 	file close fh
+	*show graph
+	import delimited "`lc_sdOut'/simfgt0.txt", clear
+	reshape long p, i(method) j(x)
+	twoway (line p x, sort), by(method)
 end
 	
 capture: program drop RCS_run
