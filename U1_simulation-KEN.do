@@ -124,6 +124,9 @@ local prob = 1
 
 *run simulation
 include "${gsdDo}/fRCS.do"
+include "${gsdDo}/fRCS_estimate_.do"
+include "${gsdDo}/fRCS_estimate_ritem_.do"
+include "${gsdDo}/fRCS_estimate_mi_.do"
 *RCS_run using "`lc_sdTemp'/HHData.dta", dirbase("${l_sdOut}") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'") egalshare
 RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
 RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
