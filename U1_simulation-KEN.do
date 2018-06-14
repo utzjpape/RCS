@@ -32,7 +32,7 @@ egen xfood = rowtotal(i04k i05k i05ak i06k i07k)
 replace xfood = xfood / 7 / fpindex if xfood<.
 keep hhid foodid xfood
 collapse (sum) xfood, by(hhid foodid)
-fItems2RCS, hhid(hhid) itemid(foodid) value(xfood) red(10)
+fItems2RCS, hhid(hhid) itemid(foodid) value(xfood) red(0)
 save "${gsdTemp}/KEN-HH-FoodItems.dta", replace
 *non food consumption
 use "`sData'/Section JKL Regular Non Food Items.dta", clear
@@ -44,7 +44,7 @@ ren j02 nonfoodid
 gen xnonfood = (j03k + j04k) * 12 / 365.25 / fpindex
 keep hhid nonfoodid xnonfood
 collapse (sum) xnonfood, by(hhid nonfoodid)
-fItems2RCS, hhid(hhid) itemid(nonfoodid) value(xnonfood) red(10)
+fItems2RCS, hhid(hhid) itemid(nonfoodid) value(xnonfood) red(0)
 save "${gsdTemp}/KEN-HH-NonFoodItems.dta", replace
 
 *get household characteristics
@@ -120,7 +120,7 @@ local ndiff=`ndiff'
 local povline = `xpovline'
 local lmethod = "`lmethod'"
 local rseed = 23081980
-local prob = 1
+local prob = .8
 
 *run simulation
 include "${gsdDo}/fRCS.do"

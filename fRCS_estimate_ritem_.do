@@ -14,30 +14,36 @@ program define RCS_estimate_ritem_ujp
 	* renaming					
 	rename xfitem* x1*
 	rename xnfitem* x2*
-	rename bfitem* b1*
-	rename bnfitem* b2* 
+	rename bfitem* c1*
+	rename bnfitem* c2* 
 	* reshape to long format
-	qui reshape long x b, i(hhid) j(item)
-	gen food = item<2000
-	* total number of items consumed per category (food - nonfood) and number evaluated
-	egen nc = sum(b), by(hhid food)
-	egen ne = sum(x>0 & ~missing(x)), by(hhid food)
-	* total items consumed
-	egen nt = sum(b), by(hhid) 
-	* weigh
-	gen w = (nc/ne)*weight
+	qui reshape long x c, i(hhid) j(item)
+	*flag for food items
+	gen food = floor(item/(10^floor(log10(item))))==1
+	*calculate probability of b for each item
+	gen b = ~missing(x) if c
+	bysort item: egen nb = total(b)
+	bysort item: egen ncb = count(b)
+	gen pb = nb/ncb
+	drop nb ncb
 	* per capita value
 	gen y = x/hhsize
 	* estimate, predict, impute
-	quiet reg y [pw=w] if b==1 & ~missing(x)
-	*predict xb, xb
-	replace x = _b[_cons]*hhsize if b==1 & missing(x)
-	drop food nc ne w y
-	qui reshape wide x b, i(hhid) j(item)
+	quiet: levelsof item, local(litem)
+	gen yhat=.
+	foreach item of local litem {
+		quiet: reg y `model' if c==1 & ~missing(x)
+		quiet: predict yhati, xb
+		quiet: replace yhat = yhati if item==`item'
+		drop yhati
+	}
+	replace x = yhat * hhsize if c==1 & missing(x)
+	drop food pb b y yhat
+	qui reshape wide x c, i(hhid) j(item)
 	rename x1* xfitem*
 	rename x2* xnfitem*
-	rename b1* bfitem*
-	rename b2* bnfitem*
+	rename c1* bfitem*
+	rename c2* bnfitem*
 	* keep only original variables
 	keep `all_vars' 
 	* totals
