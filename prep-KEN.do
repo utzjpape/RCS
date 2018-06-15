@@ -1,4 +1,4 @@
-*SIMULATE RCS FOR KENYA
+*Prepare Kenya data
 
 clear all
 ma drop all
@@ -89,7 +89,6 @@ drop if missing(ctf) | missing(ctnf) | (ctf==0)
 drop ctf ctnf
 save "${gsdData}/KEN-HHData.dta", replace
 
-*start RCS code
 *check whether we can reconstruct the consumption aggregate at the item level
 use "${gsdData}/KEN-HHData.dta", clear
 ren cluster id_clust
@@ -101,43 +100,3 @@ mean poor [pweight=weight*hhsize]
 mean poor [pweight=weight*hhsize], over(strata)
 local model = "hhsize pchild psenior i.hhsex i.hhtoilet i.hhtenure i.hhhouse i.hhcook hhrooms i.strata"
 reg y2_i `model'
-*number of modules
-local nmodules = 1
-*number of simulations (should be 20)
-local nsim = 5
-*number of imputations (should be 50)
-local nmi = 50
-*number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
-local ndiff = 3
-*methods
-local lmethod = "ritem_ujp"
-*other parameters
-local using= "${gsdData}/KEN-HHData.dta"
-local ncoref = 5
-local ncorenf = 5
-local ndiff=`ndiff'
-local povline = `xpovline'
-local lmethod = "`lmethod'"
-local rseed = 23081980
-
-*read library
-include "${gsdDo}/fRCS.do"
-include "${gsdDo}/fRCS_estimate_.do"
-include "${gsdDo}/fRCS_estimate_ritem_.do"
-include "${gsdDo}/fRCS_estimate_mi_.do"
-
-*run over different p
-forvalues prob = .9 .8 : .1 {
-	local dirbase = "${gsdOutput}/KEN-d`ndiff'm`nmodules'p`prob'"
-	RCS_run using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') p(`prob') lmethod("`lmethod'") povline(`povline') model("`model'") egalshare rseed(`rseed')
-	gen prob = `prob'
-	save "${gsdTemp}/simdiffp`prob'.dta", replace
-}
-
-*run simulation
-*RCS_run using "`lc_sdTemp'/HHData.dta", dirbase("${l_sdOut}") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'") egalshare
-RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
-RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
-RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
-RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
-RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
