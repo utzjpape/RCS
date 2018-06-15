@@ -883,7 +883,7 @@ end
 	
 capture: program drop RCS_run
 program define RCS_run
-	syntax using/, dirout(string) nmodules(integer) ncoref(integer) ncorenf(integer) ndiff(integer) nsim(integer) nmi(integer) lmethod(namelist) povline(real) model(string) [EGALshare] rseed(integer) [Prob(real 1.0)]
+	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) ndiff(integer) nsim(integer) nmi(integer) lmethod(namelist) povline(real) model(string) [EGALshare] rseed(integer) [Prob(real 1.0)]
 	
 	local probX100 = round(`prob'*100)
 	local dirbase = "`dirout'/d`ndiff'm`nmodules'p`prob_id'"

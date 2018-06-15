@@ -113,20 +113,28 @@ local ndiff = 3
 local lmethod = "ritem_ujp"
 *other parameters
 local using= "${gsdData}/KEN-HHData.dta"
-local dirbase = "${gsdOutput}/KEN-d`ndiff'm`nmodules'"
 local ncoref = 5
 local ncorenf = 5
 local ndiff=`ndiff'
 local povline = `xpovline'
 local lmethod = "`lmethod'"
 local rseed = 23081980
-local prob = .8
 
-*run simulation
+*read library
 include "${gsdDo}/fRCS.do"
 include "${gsdDo}/fRCS_estimate_.do"
 include "${gsdDo}/fRCS_estimate_ritem_.do"
 include "${gsdDo}/fRCS_estimate_mi_.do"
+
+*run over different p
+forvalues prob = .9 .8 : .1 {
+	local dirbase = "${gsdOutput}/KEN-d`ndiff'm`nmodules'p`prob'"
+	RCS_run using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') p(`prob') lmethod("`lmethod'") povline(`povline') model("`model'") egalshare rseed(`rseed')
+	gen prob = `prob'
+	save "${gsdTemp}/simdiffp`prob'.dta", replace
+}
+
+*run simulation
 *RCS_run using "`lc_sdTemp'/HHData.dta", dirbase("${l_sdOut}") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'") egalshare
 RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
 RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
