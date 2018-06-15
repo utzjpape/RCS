@@ -5,7 +5,7 @@ global suser = c(username)
 
 clear all
 set more off
-set maxvar 120000
+set maxvar 30000
 set matsize 10000
 set seed 23081980 
 set sortseed 11041955
@@ -14,6 +14,7 @@ set sortseed 11041955
 if (inlist("${suser}","wb390290","WB390290")) {
 	*Utz
 	if inlist("`c(hostname)'","WIN-82M1NHB392O","wbgmsutz0318") {
+		set maxvar 120000
 		*on virtual machine
 		local swdLocal = "D:\SV-RCS"
 		*Box directory where the Data folder can be located
