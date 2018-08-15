@@ -649,7 +649,7 @@ program define RCS_collate
 		*prepare stata file
 		insheet using "`lc_sdTemp'/simd_`smethod'.txt", clear
 		*summarize imputations for MI
-		quiet: merge m:1 hhid using "`using'", nogen keep(match) keepusing(weight cluster)
+		quiet: merge m:1 hhid using "`using'", nogen keep(match) keepusing(weight cluster urban)
 		*get reference
 		quiet: gen x = est if simulation==0
 		quiet: bysort hhid: egen ref = max(x)
@@ -681,20 +681,35 @@ program define RCS_collate
 	}
 end
 	
+* parameters:
+*   dirbase: folder anchor for files
+*   lmethod: list of methods to analyze
+*   povline: poverty line
+*   urban: -1: no restriction, 0: rural only, 1: urban only
 capture: program drop RCS_analyze
 program define RCS_analyze
-	syntax using/, dirbase(string) lmethod(namelist) povline(real)
+	syntax using/, dirbase(string) lmethod(namelist) povline(real) [Urban(integer -1)]
 	*prepare output directories
 	local lc_sdTemp = "`dirbase'/Temp"
 	local lc_sdOut = "`dirbase'/Out"
 	
-	local lind = "fgt0 fgt1 fgt2 gini"
+	*configure urban/rural filter
+	local sfsuff = ""
+	local sdrop = " if urban==1-`urban'" 
+	if (`urban'==0) {
+		local sfsuff = "-rural"
+	}
+	else if (`urban'==1) {
+		local sfsuff = "-urban"
+	}	
 	*analyze relative bias and relative standard error
+	local lind = "fgt0 fgt1 fgt2 gini"
 	capture: file close fh
-	file open fh using "`lc_sdOut'/simc.txt", replace write
+	file open fh using "`lc_sdOut'/simc`sfsuff'.txt", replace write
 	file write fh "Method" _tab "Bias (HH)" _tab "SE (HH)" _tab "Bias (CL)" _tab "SE (CL)"_tab "Bias (SIM)" _tab "SE (SIM)"_n
 	*add reduced
 	use "`lc_sdTemp'/simd_`: word 1 of `lmethod''.dta", clear
+	quiet: drop `sdrop'
 	file write fh "red"
 	*calculate relative difference at hh-level
 	quiet: gen rd = (red - ref) / ref * 100
@@ -707,6 +722,7 @@ program define RCS_analyze
 	file write fh _tab (r(bias)) _tab (r(se))
 	*simulation
 	use "`lc_sdTemp'/simd_`: word 1 of `lmethod''.dta", clear
+	quiet: drop `sdrop'
 	collapse (mean) red ref [aweight=weight], by(simulation)
 	quiet: gen rd = (red - ref) / ref * 100
 	quiet: fse "ref" "red" 1
@@ -714,13 +730,14 @@ program define RCS_analyze
 	*add other methods
 	foreach smethod of local lmethod {
 		use "`lc_sdTemp'/simd_`smethod'.dta", clear
+		quiet: drop `sdrop'
 		file write fh "`smethod'"
 		*calculate relative difference at hh-level
 		quiet: gen rd = (est - ref) / ref * 100
 		quiet: fse "ref" "est" 1
 		file write fh _tab (r(bias)) _tab (r(se))
 		quiet: hist rd if inrange(rd,-100,100) , normal dens xline(0) name("hh_`smethod'",replace) xtitle("Relative Difference, in %") title("Household Estimation Error (`smethod')") note("Bias: `r(bias)'; Standard Error: `r(se)'") graphregion(color(white)) bgcolor(white)
-		graph export "`lc_sdTemp'/hh_rdiff_`smethod'.png", replace
+		graph export "`lc_sdTemp'/hh_rdiff_`smethod'`sfsuff'.png", replace
 		local gl_hh = "`gl_hh' hh_`smethod'"
 		*per EA
 		collapse (mean) est ref [aweight=weight], by(simulation cluster)
@@ -728,16 +745,17 @@ program define RCS_analyze
 		quiet: fse "ref" "est" 1
 		file write fh _tab (r(bias)) _tab (r(se))
 		quiet: hist rd if inrange(rd,-100,100) , normal dens xline(0) name("cl_`smethod'",replace) xtitle("Relative Difference, in %") title("Cluster Estimation Error (`smethod')") note("Bias: `r(bias)'; Standard Error: `r(se)'")graphregion(color(white)) bgcolor(white)
-		graph export "`lc_sdTemp'/ea_rdiff_`smethod'.png", replace
+		graph export "`lc_sdTemp'/ea_rdiff_`smethod'`sfsuff'.png", replace
 		local gl_cl = "`gl_cl' cl_`smethod'"
 		*simulation
 		use "`lc_sdTemp'/simd_`smethod'.dta", clear
+		quiet: drop `sdrop'
 		collapse (mean) est ref [aweight=weight], by(simulation)
 		quiet: gen rd = (est - ref) / ref * 100
 		quiet: fse "ref" "est" 1
 		file write fh _tab (r(bias)) _tab (r(se)) _n
 		quiet: hist rd if inrange(rd,-100,100) , normal dens xline(0) name("sim_`smethod'",replace) xtitle("Relative Difference, in %") title("Simulation Estimation Error (`smethod')") note("Bias: `r(bias)'; Standard Error: `r(se)'")graphregion(color(white)) bgcolor(white)
-		graph export "`lc_sdTemp'/sim_rdiff_`smethod'.png", replace
+		graph export "`lc_sdTemp'/sim_rdiff_`smethod'`sfsuff'.png", replace
 		local gl_sim = "`gl_sim' sim_`smethod'"
 	}
 	file close fh
@@ -745,19 +763,20 @@ program define RCS_analyze
 	local ls = "hh cl sim"
 	foreach s of local ls {
 		graph combine `gl_`s'', name("cmb_`s'", replace) xcommon
-		graph export "`lc_sdOut'/rdiff_`s'.png", replace
+		graph export "`lc_sdOut'/rdiff_`s'`sfsuff'.png", replace
 		graph drop `gl_`s'' cmb_`s'
 	}
 	
 	*analyze consumption distribution with poverty rate and inequality measures
 	capture: file close fh
-	file open fh using "`lc_sdOut'/simp.txt", replace write
+	file open fh using "`lc_sdOut'/simp`sfsuff'.txt", replace write
 	file write fh "Method" _tab "FGT0 (Bias)" _tab "FGT0 (SE)" _tab "FGT1 (Bias)" _tab "FGT1 (SE)" _tab "FGT2 (Bias)" _tab "FGT2 (SE)" _tab "Gini (Bias)"  _tab "Gini (SE)" _n
 	*add reduced aggregated
 	file write fh "red"
 	*prepare dataset
 	use "`lc_sdTemp'/simd_`: word 1 of `lmethod''_imp.dta", clear
 	quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+	quiet: drop `sdrop'
 	quiet: replace hhid = hhid * 100 + imputation
 	drop imputation
 	*calculate poverty indices and gini
@@ -788,6 +807,7 @@ program define RCS_analyze
 		*prepare dataset
 		use "`lc_sdTemp'/simd_`smethod'_imp.dta", clear
 		quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+		quiet: drop `sdrop'
 		quiet: replace hhid = hhid * 100 + imputation
 		drop imputation
 		*calculate poverty indices and gini
@@ -812,7 +832,7 @@ program define RCS_analyze
 			fse "ref_`sind'" "est_`sind'" 0
 			file write fh _tab (r(bias)) _tab (r(se))
 			hist est_`sind' , normal dens xline(`ref_mean') start(0) width(0.01) xscale(range(0 1)) xlabel(0[.25]1) xtitle("`sind'") name("`sind'_`smethod'", replace) title("`sind' (`smethod')") note("Bias: `r(bias)'; Standard Error: `r(se)'") graphregion(color(white)) bgcolor(white)
-			graph export "`lc_sdTemp'/sim_`sind'_`smethod'.png", replace
+			graph export "`lc_sdTemp'/sim_`sind'_`smethod'`sfsuff'.png", replace
 			local gl_`sind' = "`gl_`sind'' `sind'_`smethod'"
 		}
 		file write fh _n
@@ -821,7 +841,7 @@ program define RCS_analyze
 	*combine graphs
 	foreach sind of local lind {
 		graph combine `gl_`sind'', name("cmb_`sind'", replace) graphregion(col(white))
-		graph export "`lc_sdOut'/`sind'.png", replace
+		graph export "`lc_sdOut'/`sind'`sfsuff'.png", replace
 		graph drop `gl_`sind'' cmb_`sind'
 	}
 
@@ -829,7 +849,7 @@ program define RCS_analyze
 	di "Analyze FGT0 bias for each percentile..."
 	*write output file
 	capture: file close fh
-	file open fh using "`lc_sdOut'/simfgt0.txt", replace write
+	file open fh using "`lc_sdOut'/simfgt0`sfsuff'.txt", replace write
 	file write fh "Method"
 	*add poverty lines to header
 	forvalues rx = 1/100 {
@@ -839,6 +859,7 @@ program define RCS_analyze
 	*obtain poverty lines
 	use "`lc_sdTemp'/simd_`: word 1 of `lmethod''_imp.dta", clear
 	quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+	quiet: drop `sdrop'
 	_pctile ref if simulation==1 & imputation==1 [pweight=weight*hhsize], nq(100)
 	forvalues i = 1/100 {
 		local pline`i' = r(r`i')
@@ -864,6 +885,7 @@ program define RCS_analyze
 		file write fh "`smethod'"
 		use "`lc_sdTemp'/simd_`smethod'_imp.dta", clear
 		quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+		quiet: drop `sdrop'
 		*iterate over poverty lines
 		forvalues i = 1/100 {
 			gen x = est < `pline`i'' if est<.
@@ -876,7 +898,7 @@ program define RCS_analyze
 	}
 	file close fh
 	*show graph
-	import delimited "`lc_sdOut'/simfgt0.txt", clear
+	import delimited "`lc_sdOut'/simfgt0`sfsuff'.txt", clear
 	reshape long p, i(method) j(x)
 	twoway (line p x, sort), by(method)
 end

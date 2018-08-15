@@ -124,7 +124,7 @@ local nmi = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
 local ndiff = 3
 *methods
-local lmethod = "med avg reg tobit MICE MImvn"
+local lmethod = "med avg reg tobit MICE"
 local using= "${gsdData}/SLD`bH'-HHData.dta"
 local ncoref = 33
 local ncorenf = 25
