@@ -367,6 +367,70 @@ program define RCS_prepare
 	save "`lc_sdTemp'/fsim_nfpartition.dta", replace
 end
 
+* descriptive statistics for the model, based on the full dataset
+* make sure to run RCS_prepare first
+capture: program drop RCS_describe_model
+program define RCS_describe_model
+	syntax using/, dirbase(string) nmodules(integer) model(string)
+	*prepare output directories
+	capture: mkdir "`dirbase'"
+	local lc_sdTemp = "`dirbase'/Temp"
+	capture: mkdir "`lc_sdTemp'"
+	local lc_sdOut = "`dirbase'/Out"
+	capture: mkdir "`lc_sdOut'"
+	
+	*summarize at module level
+	use "`using'", clear
+	keep hhid xnonfood* xfood*
+	ren xnonfood* xfoodX*
+	reshape long xfood, i(hhid) j(itemid) string
+	*get separate IDs
+	destring itemid, gen(foodid) force
+	destring itemid, gen(nonfoodid) ignore("X")
+	replace nonfoodid = . if !missing(foodid)
+	gen isfood = !missing(foodid)
+	*merge partitioning and collapse
+	merge m:1 foodid using "`lc_sdTemp'/fsim_fpartition.dta", nogen keep(master match)
+	merge m:1 nonfoodid using "`lc_sdTemp'/fsim_nfpartition.dta", nogen keep(master match match_update) update
+	collapse xfood, by(hhid itemmod isfood)
+	egen x = concat(isfood itemmod)
+	drop isfood itemmod
+	reshape wide xfood, i(hhid) j(x) string
+	ren (xfood0* xfood1*) (xnfcons* xfcons*)
+	save "`lc_sdTemp'/modcons.dta", replace
+	*test model
+	use "`using'", clear
+	merge 1:1 hhid using "`lc_sdTemp'/modcons.dta", nogen keep(match) assert(match)
+	*get per capita variables
+	foreach v of varlist xfcons* xnfcons* {
+		quiet: gen `v'_pc = `v'/hhsize
+	} 
+	*create percentiles
+	foreach v of varlist xfcons0_pc xnfcons0_pc xdurables_pc {
+		xtile p`v' = `v' [pweight=weight], nquantiles(4)
+	}
+	*remove outliers
+	foreach v of varlist xfcons?_pc xnfcons?_pc xdurables_pc {
+		*remove outliers
+		quiet: summ `v',d
+		quiet: replace `v'= `r(p99)' if (`v'>`r(p99)') & (`v'<.)
+	}
+	*run module analytics
+	forvalues imod = 1/`nmodules' {
+		*food
+		reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight]
+		*non-food
+		reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight]
+	}
+
+
+	
+	
+	
+	
+	
+end
+
 * RCS_mask: creates one output file per simulation with masked consumption
 * parameters:
 *   using: prepared dataset for analysis
