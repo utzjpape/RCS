@@ -38,7 +38,7 @@ quiet: include "${gsdDo}/fRCS_estimate_ritem_.do"
 quiet: include "${gsdDo}/fRCS_estimate_mi_.do"
 
 *run over different p
-forvalues prob = 9(-1)1 {
+forvalues prob = 4(-1)3 {
 	local p = `prob'/10
 	local dirbase = "${gsdOutput}/KEN-d`ndiff'm`nmodules'p`prob'"
 	RCS_run using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') p(`p') lmethod("`lmethod'") povline(`povline') model("`model'") egalshare rseed(`rseed')
@@ -50,7 +50,7 @@ forvalues prob = 9(-1)1 {
 clear
 gen long prob=0
 save "${gsdTemp}/simdiff.dta", replace
-forvalues prob = 9(-1)4 {
+forvalues prob = 4(-1)3 {
 	use "${gsdTemp}/simdiffp`prob'.dta", clear
 	drop prob
 	gen long prob = `prob'
