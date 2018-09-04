@@ -34,7 +34,7 @@ program define RCS_estimate_ritem_par
 	* per capita value
 	gen y = x/hhsize
 	* estimate, predict, impute
-	reg y `mymodel' n1 n1sq n2 n2sq if (c==1) & ~missing(x)
+	reg y `model' n1 n1sq n2 n2sq if (c==1) & ~missing(x)
 	predict yhat if (c==1) & missing(x), xb
 	replace x = yhat * hhsize if c==1 & missing(x)
 	drop food pb b y yhat

@@ -51,7 +51,7 @@ forvalues prob = 9(-1)1 {
 clear
 gen long prob=0
 save "${gsdTemp}/simdiff.dta", replace
-forvalues prob = 4(-1)3 {
+forvalues prob = 9(-1)1 {
 	use "${gsdTemp}/simdiffp`prob'.dta", clear
 	drop prob
 	gen long prob = `prob'
