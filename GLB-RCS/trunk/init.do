@@ -6,7 +6,7 @@ global suser = c(username)
 clear all
 set more off
 set maxvar 30000
-set matsize 10000
+set matsize 11000
 set seed 23081980 
 set sortseed 11041955
 
