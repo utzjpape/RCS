@@ -11,6 +11,11 @@ program define RCS_estimate_ritem_ujp
 	*start estimation
 	qui ds
 	local all_vars `r(varlist)'
+	*calculating number of consumed items
+	egen n1 = rowtotal(bfitem*)
+	gen n1sq = n1*n1
+	egen n2 = rowtotal(bnfitem*)
+	gen n2sq = n2*n2
 	* renaming					
 	rename xfitem* x1*
 	rename xnfitem* x2*
@@ -32,10 +37,22 @@ program define RCS_estimate_ritem_ujp
 	quiet: levelsof item, local(litem)
 	gen yhat=.
 	foreach item of local litem {
-		quiet: reg y `model' if c==1 & ~missing(x)
-		quiet: predict yhati, xb
-		quiet: replace yhat = yhati if item==`item'
-		drop yhati
+		quiet: capture: reg y `model' n1 n1sq n2 n2sq if (c==1) & ~missing(x) & (item==`item')
+		if _rc==0 {
+			quiet: predict yhati if (c==1) & missing(x) & (item==`item'), xb
+			quiet: replace yhat = yhati if ~missing(yhati)
+			drop yhati
+		}
+		else {
+			*insufficient observations
+			quiet: summ y if (c==1) & ~missing(x) & (item==`item')
+			if !missing(r(mean)) {
+				quiet: replace yhat = r(mean) if (c==1) & missing(x) & (item==`item')
+			}
+			else {
+				quiet: replace yhat = 0 if (c==1) & missing(x) & (item==`item')
+			}
+		}
 	}
 	replace x = yhat * hhsize if c==1 & missing(x)
 	drop food pb b y yhat
