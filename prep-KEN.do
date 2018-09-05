@@ -87,6 +87,7 @@ egen ctf = rowtotal(xfood*)
 egen ctnf = rowtotal(xnonfood*)
 drop if missing(ctf) | missing(ctnf) | (ctf==0)
 drop ctf ctnf
+gen urban=(strata==2)
 save "${gsdData}/KEN-HHData.dta", replace
 
 *check whether we can reconstruct the consumption aggregate at the item level
