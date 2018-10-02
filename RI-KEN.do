@@ -22,7 +22,7 @@ local nmi = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
 local ndiff = 3
 *methods
-local lmethod = "ritem_par"
+local lmethod = "ri_mi_par"
 *other parameters
 local using= "${gsdData}/KEN-HHData.dta"
 local ncoref = 5
@@ -43,6 +43,7 @@ forvalues prob = 9(-1)1 {
 	local p = `prob'/10
 	local dirbase = "${gsdOutput}/KEN-d`ndiff'm`nmodules'p`prob'"
 	RCS_run using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') p(`p') lmethod("`lmethod'") povline(`povline') model("`model'") egalshare rseed(`rseed')
+	*RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
 	gen long prob = `prob'
 	save "${gsdTemp}/simdiffp`prob'.dta", replace
 }
@@ -62,9 +63,9 @@ drop if method=="red"
 reshape wide p,i(x prob) j(method) string
 
 *analyze
-gen d = abs(pref - pritem_ujp)
+gen d = abs(pref - p`lmethod')
 mean d, over(prob)
-twoway (function y=x) (line pref pritem_ujp, sort), by(prob)
+twoway (function y=x) (line pref p`lmethod', sort), by(prob)
 drop d
-reshape wide pritem_ujp, i(x pref) j(prob)
-twoway (function y=x, lpattern(dash) lcolor(gs5)) (line pritem_ujp? pref, sort)
+reshape wide p`lmethod', i(x pref) j(prob)
+twoway (function y=x, lpattern(dash) lcolor(gs5)) (line p`lmethod'? pref, sort)
