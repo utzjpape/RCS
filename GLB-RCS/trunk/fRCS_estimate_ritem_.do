@@ -1,14 +1,14 @@
 *estimation function for the random item approach for fRCS::RCS_estimate_ritem
 
-*use the xxx to estimate missing consumption, all items at once
-capture: program drop RCS_estimate_ritem_par
-program define RCS_estimate_ritem_par
+*use mi to estimate missing consumption, all items at once
+capture: program drop RCS_estimate_ri_mi_par
+program define RCS_estimate_ri_mi_par
 	syntax , nmodules(integer) nsim(integer) nmi(integer) model(string)
 	*prepare output directories
 	local N = `nsim'
 	local M = `nmodules'
 	local nI = `nmi'
-	*start estimation
+	*prepare dataset
 	qui ds
 	local all_vars `r(varlist)'
 	*calculating number of consumed items
@@ -16,7 +16,7 @@ program define RCS_estimate_ritem_par
 	gen n1sq = n1*n1
 	egen n2 = rowtotal(bnfitem*)
 	gen n2sq = n2*n2
-	* renaming					
+	* renaming
 	rename xfitem* x1*
 	rename xnfitem* x2*
 	rename bfitem* c1*
@@ -34,7 +34,79 @@ program define RCS_estimate_ritem_par
 	* per capita value
 	gen y = x/hhsize
 	* estimate, predict, impute
-	reg y `model' n1 n1sq n2 n2sq if (c==1) & ~missing(x)
+	local mipre = "mi passive: "
+	*run MI
+	mi set wide
+	mi register imputed y
+	mi register regular n1 n1sq n2 n2sq c x
+	mi register regular hh* cluster strata pchild psenior cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
+	mi impute regress y = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' if (c==1), add(`nI')
+	*transform into household-level dataset
+	assert (y==0) if (c==0)
+	keep hhid xdurables_pc ccons_pc rcons_pc y _* item hhsize 
+	*sum at the hh-level
+	mi convert flong, clear
+	mi xeq: by hhid, sort: egen y_sum = total(y)
+	*maintain mi consistency
+	mi xeq 0: gen Mis_y = (y==.)  
+    mi xeq 0: by hhid, sort: egen Mis_total = total(Mis_y) 
+	mi xeq 0: replace y_sum = . if Mis_total>0
+	*only keep hh-level records
+	mi xeq: sort hhid item; by hhid: drop if _n>1
+	mi xeq: drop item y
+	drop Mis_y Mis_total
+	ren y_sum xfcons1_pc
+	mi register imputed xfcons1_pc
+	mi convert wide, clear
+	*note that we stop distinguishing between food and non-food here (for computational efficiencies)
+	gen xnfcons1_pc = 0
+	*all consumption is collected in module 1; thus, need to set module 0 to be zero
+	gen xfcons0_pc = 0
+	gen xnfcons0_pc = 0
+	gen xcons_pc = .
+	mi register passive xcons_pc
+	* don't use originals
+	gen oxfcons0_pc = .
+	gen oxnfcons0_pc = .
+	gen oxfcons1_pc = .
+	gen oxnfcons1_pc = .
+end
+
+*use the xxx to estimate missing consumption, all items at once
+capture: program drop RCS_estimate_ri_par
+program define RCS_estimate_ri_par
+	syntax , nmodules(integer) nsim(integer) nmi(integer) model(string)
+	*prepare output directories
+	local N = `nsim'
+	local M = `nmodules'
+	local nI = `nmi'
+	*start estimation
+	qui ds
+	local all_vars `r(varlist)'
+	*calculating number of consumed items
+	egen n1 = rowtotal(bfitem*)
+	gen n1sq = n1*n1
+	egen n2 = rowtotal(bnfitem*)
+	gen n2sq = n2*n2
+	* renaming
+	rename xfitem* x1*
+	rename xnfitem* x2*
+	rename bfitem* c1*
+	rename bnfitem* c2* 
+	* reshape to long format
+	qui reshape long x c, i(hhid) j(item)
+	*flag for food items
+	gen food = floor(item/(10^floor(log10(item))))==1
+	*calculate probability of b for each item
+	gen b = ~missing(x) if c
+	bysort item: egen nb = total(b)
+	bysort item: egen ncb = count(b)
+	gen pb = nb/ncb
+	drop nb ncb
+	* per capita value
+	gen y = x/hhsize
+	* estimate, predict, impute
+	reg y `model' i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc n1 n1sq n2 n2sq if (c==1) & ~missing(x)
 	predict yhat if (c==1) & missing(x), xb
 	replace x = yhat * hhsize if c==1 & missing(x)
 	drop food pb b y yhat
@@ -62,8 +134,8 @@ program define RCS_estimate_ritem_par
 end
 
 *use the xxx to estimate missing consumption, item-by-item
-capture: program drop RCS_estimate_ritem_seq
-program define RCS_estimate_ritem_seq
+capture: program drop RCS_estimate_ri_seq
+program define RCS_estimate_ri_seq
 	syntax , nmodules(integer) nsim(integer) nmi(integer) model(string)
 	*prepare output directories
 	local N = `nsim'

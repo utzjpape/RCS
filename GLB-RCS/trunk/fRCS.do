@@ -638,15 +638,22 @@ program define RCS_estimate
 			RCS_estimate_`smethod' , nmodules(`nmodules') nsim(`nsim') nmi(`nmi') model("`model'")
 			*check if mi dataset
 			quiet: mi query
-			if "`r(style)'"!="" local mipre = "mi:"
+			if "`r(style)'"!="" local mipre = "mi passive:"
 			*build aggregates; but replace with originals if available
 			quiet: `mipre' replace xcons_pc = xdurables_pc
 			foreach v of varlist xfcons?_pc xnfcons?_pc {
 				quiet: `mipre' replace xcons_pc = xcons_pc + o`v' if ~missing(o`v')
 				quiet: `mipre' replace xcons_pc = xcons_pc + `v' if missing(o`v')
 			}
-			*estimate total consumption
-			drop bnfitem* bfitem*
+			*cleaning
+			if ("`mipre'"!="") {
+				keep hhid xcons_pc ccons_pc rcons_pc _*xcons_pc _mi*
+				mi register imputed xcons_pc
+				mi update
+			}
+			else {
+				keep hhid xcons_pc ccons_pc rcons_pc
+			}
 			quiet: compress
 			save "`lc_sdTemp'/sim_`smethod'_`isim'.dta", replace
 		}
@@ -665,54 +672,52 @@ program define RCS_collate
 	*extract detailed results from estimation
 	foreach smethod of local lmethod {
 		di "Extracting for `smethod':"
-		capture: file close fh
-		file open fh using "`lc_sdTemp'/simd_`smethod'.txt", replace write
-		*prepare title
-		use "`lc_sdTemp'/sim_`smethod'_1.dta", clear
-		quiet: levelsof hhid, local(xhh)
-		file write fh "Simulation" _tab "Imputation" _tab "hhid" _tab "est" _n
-		*extract consumption
+		*is mi dataset?
 		forvalues isim = 1/`N' {
-			di "`isim'"
 			use "`lc_sdTemp'/sim_`smethod'_`isim'.dta", clear
-			*real and reduced values
-			if (`isim'==1) {
-				*real values
-				foreach id of local xhh {
-					quiet: summ ccons_pc if hhid==`id'
-					file write fh "0" _tab "0" _tab "`id'" _tab (r(mean)) _n
-				}
-				*reduced consumption
-				foreach id of local xhh {
-					quiet: summ rcons_pc if hhid==`id'
-					file write fh "-1" _tab "0" _tab "`id'" _tab (r(mean)) _n
-				}
-			}
-			*estimations
+			gen Simulation = `isim'
 			quiet: mi query
 			if ("`r(style)'"=="") {
-				*extract non-mi dataset
-				foreach id of local xhh {
-					quiet: summ xcons_pc if hhid==`id'
-					file write fh "`isim'" _tab "1" _tab "`id'" _tab (r(mean)) _n
+				if (`isim'==1) {
+					*extract reference and reduced
+					ren (xcons_pc ccons_pc rcons_pc) (est1 est0 est99)
+					reshape long est, i(hhid) j(x)
+					recode x (99=-1)
+					replace Simulation = x
+					drop x
 				}
+				else {
+					ren xcons_pc est
+					drop ccons_pc rcons_pc
+				}
+				gen Imputation = (Simulation>0)
 			}
 			else {
-				*extract multiple imputations
-				forvalues iter=1/`nI' {
-					use "`lc_sdTemp'/sim_`smethod'_`isim'.dta", clear
-					mi extract `iter', clear
-					foreach id of local xhh {
-						quiet: summ xcons_pc if hhid==`id'
-						file write fh "`isim'" _tab "`iter'" _tab "`id'" _tab (r(mean)) _n
-					}
+				*convert to long format and get observation for reference and reduced
+				mi convert flong
+				mi unset
+				ren (mi_m xcons_pc) (Imputation est)
+				if (`isim'==1) {
+					expand 2 if Imputation==0, gen(x)
+					replace Imputation = -1 if x==1
+					drop x
+					*move ref/red indicator from Imputation to Simulation level
+					replace est = ccons_pc if Imputation==0
+					replace est = rcons_pc if Imputation==-1
+					replace Simulation = Imputation if Imputation <1
+					replace Imputation = 0 if Imputation < 1
+				}
+				else {
+					drop if Imputation<1
 				}
 			}
+			keep Simulation Imputation hhid est
+			order Simulation Imputation hhid est
+			*append simulations
+			if `isim'>1 append using "`lc_sdTemp'/simd_`smethod'.dta"
+			save "`lc_sdTemp'/simd_`smethod'.dta", replace
 		}
-		file close fh
-		*prepare stata file
-		insheet using "`lc_sdTemp'/simd_`smethod'.txt", clear
-		*summarize imputations for MI
+		*prepare analysis file
 		quiet: merge m:1 hhid using "`using'", nogen keep(match) keepusing(weight cluster urban)
 		*get reference
 		quiet: gen x = est if simulation==0
