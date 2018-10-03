@@ -675,47 +675,49 @@ program define RCS_collate
 		*is mi dataset?
 		forvalues isim = 1/`N' {
 			use "`lc_sdTemp'/sim_`smethod'_`isim'.dta", clear
-			gen Simulation = `isim'
+			gen simulation = `isim'
 			quiet: mi query
-			if ("`r(style)'"=="") {
+			quiet: if ("`r(style)'"=="") {
 				if (`isim'==1) {
 					*extract reference and reduced
 					ren (xcons_pc ccons_pc rcons_pc) (est1 est0 est99)
 					reshape long est, i(hhid) j(x)
 					recode x (99=-1)
-					replace Simulation = x
+					replace simulation = x
 					drop x
 				}
 				else {
 					ren xcons_pc est
 					drop ccons_pc rcons_pc
 				}
-				gen Imputation = (Simulation>0)
+				gen imputation = (simulation>0)
 			}
-			else {
+			quiet: else {
 				*convert to long format and get observation for reference and reduced
-				mi convert flong
-				mi unset
-				ren (mi_m xcons_pc) (Imputation est)
+				quiet: mi convert flong, clear
+				quiet: mi unset
+				ren (mi_m xcons_pc) (imputation est)
 				if (`isim'==1) {
-					expand 2 if Imputation==0, gen(x)
-					replace Imputation = -1 if x==1
+					expand 2 if imputation==0, gen(x)
+					replace imputation = -1 if x==1
 					drop x
 					*move ref/red indicator from Imputation to Simulation level
-					replace est = ccons_pc if Imputation==0
-					replace est = rcons_pc if Imputation==-1
-					replace Simulation = Imputation if Imputation <1
-					replace Imputation = 0 if Imputation < 1
+					replace est = ccons_pc if imputation==0
+					replace est = rcons_pc if imputation==-1
+					replace simulation = imputation if imputation <1
+					replace imputation = 0 if imputation < 1
 				}
 				else {
-					drop if Imputation<1
+					drop if imputation<1
 				}
 			}
-			keep Simulation Imputation hhid est
-			order Simulation Imputation hhid est
+			keep simulation imputation hhid est
+			order simulation imputation hhid est
 			*append simulations
-			if `isim'>1 append using "`lc_sdTemp'/simd_`smethod'.dta"
-			save "`lc_sdTemp'/simd_`smethod'.dta", replace
+			if (`isim'>1) {
+				append using "`lc_sdTemp'/simd_`smethod'.dta"
+			}
+			quiet: save "`lc_sdTemp'/simd_`smethod'.dta", replace
 		}
 		*prepare analysis file
 		quiet: merge m:1 hhid using "`using'", nogen keep(match) keepusing(weight cluster urban)
