@@ -45,17 +45,12 @@ program define RCS_estimate_ri_mi_par
 	assert (y==0) if (c==0)
 	keep hhid xdurables_pc ccons_pc rcons_pc y _* item hhsize 
 	*sum at the hh-level
-	mi convert flong, clear
+	mi convert flongsep _rcs_ri_mi_par, clear
 	mi xeq: by hhid, sort: egen y_sum = total(y)
 	*maintain mi consistency
-	mi xeq 0: gen Mis_y = (y==.)  
-    mi xeq 0: by hhid, sort: egen Mis_total = total(Mis_y) 
-	mi xeq 0: replace y_sum = . if Mis_total>0
+	mi xeq 0: gen Mis_y = (y==.) ; by hhid, sort: egen Mis_total = total(Mis_y) ; replace y_sum = . if Mis_total>0
 	*only keep hh-level records
-	mi xeq: sort hhid item; by hhid: drop if _n>1
-	mi xeq: drop item y
-	drop Mis_y Mis_total
-	ren y_sum xfcons1_pc
+	mi xeq: sort hhid item; by hhid: drop if _n>1 ; drop item y Mis_y Mis_total ; ren y_sum xfcons1_pc
 	mi register imputed xfcons1_pc
 	mi convert wide, clear
 	*note that we stop distinguishing between food and non-food here (for computational efficiencies)
