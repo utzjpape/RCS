@@ -3,9 +3,8 @@
 *use Multi-variate normal imputation using MCMC
 capture: program drop RCS_estimate_mi_mvn
 program define RCS_estimate_mi_mvn
-	syntax , nmodules(integer) nsim(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string)
 	*prepare output directories
-	local N = `nsim'
 	local M = `nmodules'
 	local nI = `nmi'
 	*start estimation
@@ -22,9 +21,8 @@ end
 *using chained equations
 capture: program drop RCS_estimate_mi_ce
 program define RCS_estimate_mi_ce
-	syntax , nmodules(integer) nsim(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string)
 	*prepare output directories
-	local N = `nsim'
 	local M = `nmodules'
 	local nI = `nmi'
 	*start estimation

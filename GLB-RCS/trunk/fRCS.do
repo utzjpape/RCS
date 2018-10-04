@@ -635,7 +635,7 @@ program define RCS_estimate
 			}
 			*method selection
 			local mipre = ""
-			RCS_estimate_`smethod' , nmodules(`nmodules') nsim(`nsim') nmi(`nmi') model("`model'")
+			RCS_estimate_`smethod' , nmodules(`nmodules') nmi(`nmi') model("`model'")
 			*check if mi dataset
 			quiet: mi query
 			if "`r(style)'"!="" local mipre = "mi passive:"
