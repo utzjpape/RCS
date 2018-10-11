@@ -35,11 +35,11 @@ local rseed = 23081980
 *read library
 quiet: include "${gsdDo}/fRCS.do"
 quiet: include "${gsdDo}/fRCS_estimate_.do"
-quiet: include "${gsdDo}/fRCS_estimate_ritem_.do"
+quiet: include "${gsdDo}/fRCS_estimate_ri_.do"
 quiet: include "${gsdDo}/fRCS_estimate_mi_.do"
 
 *run over different p
-forvalues prob = 8(-1)1 {
+forvalues prob = 9(-1)1 {
 	local p = `prob'/10
 	local dirbase = "${gsdOutput}/KEN-d`ndiff'm`nmodules'p`prob'"
 	RCS_run using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') p(`p') lmethod("`lmethod'") povline(`povline') model("`model'") egalshare rseed(`rseed')
