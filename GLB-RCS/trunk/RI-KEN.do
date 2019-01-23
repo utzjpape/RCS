@@ -23,6 +23,7 @@ local nmi = 50
 local ndiff = 3
 *methods
 local lmethod = "ri_mi_par"
+local lmethod = "ri_mi_par"
 *other parameters
 local using= "${gsdData}/KEN-HHData.dta"
 local ncoref = 5
@@ -38,22 +39,24 @@ quiet: include "${gsdDo}/fRCS_estimate_.do"
 quiet: include "${gsdDo}/fRCS_estimate_ri_.do"
 quiet: include "${gsdDo}/fRCS_estimate_mi_.do"
 
+local lprob = "4 5 6"
+
 *run over different p
-forvalues prob = 9(-1)1 {
+foreach prob of local lprob {
 	local p = `prob'/10
-	local dirbase = "${gsdOutput}/KEN-d`ndiff'm`nmodules'p`prob'"
+	local dirbase = "${gsdOutput}/KEN-`lmethod'-p`prob'"
 	RCS_run using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') nsim(`nsim') nmi(`nmi') p(`p') lmethod("`lmethod'") povline(`povline') model("`model'") egalshare rseed(`rseed')
 	*RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
 	gen long prob = `prob'
-	save "${gsdTemp}/simdiffp`prob'.dta", replace
+	save "${gsdTemp}/KEN-simdiff-`lmethod'-p`prob'.dta", replace
 }
 
 *collect
 clear
 gen long prob=0
 save "${gsdTemp}/simdiff.dta", replace
-forvalues prob = 9(-1)1 {
-	use "${gsdTemp}/simdiffp`prob'.dta", clear
+foreach prob of local lprob {
+	use "${gsdTemp}/KEN-simdiff-`lmethod'-p`prob'.dta", clear
 	drop prob
 	gen long prob = `prob'
 	append using "${gsdTemp}/simdiff.dta"

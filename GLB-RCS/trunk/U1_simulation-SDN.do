@@ -19,6 +19,8 @@ local nI = 20
 local ndiff = 3
 
 run "${gsdDo}/fRCS.do"
+include "${gsdDo}/fRCS_estimate_.do"
+include "${gsdDo}/fRCS_estimate_mi_.do"
 
 import excel "`sData'/Questionnaire_2017/fitem.xlsx", sheet("Sheet1") firstrow clear
 labmask item, val(itemlabel)
