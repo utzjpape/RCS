@@ -422,13 +422,6 @@ program define RCS_describe_model
 		*non-food
 		reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight]
 	}
-
-
-	
-	
-	
-	
-	
 end
 
 * RCS_mask: creates one output file per simulation with masked consumption

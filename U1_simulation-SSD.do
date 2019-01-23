@@ -125,7 +125,7 @@ local ncoref = 33
 local ncorenf = 25
 local ndiff=`ndiff'
 local povline = `xpovline'
-local lmethod = "med avg reg tobit MICE MImvn"
+local lmethod = "med avg reg tobit mi_ce"
 local rseed = 23081980
 local prob = 1
 local model = "hhsize pchild psenior i.hhsex i.hhwater i.hhcook hhsleep i.hhhouse i.hhtoilet i.hhwaste i.strata"
@@ -147,6 +147,9 @@ reg ct_pc `model'
 
 *run simulation
 include "${gsdDo}/fRCS.do"
+include "${gsdDo}/fRCS_estimate_.do"
+include "${gsdDo}/fRCS_estimate_mi_.do"
+
 *RCS_run using "`lc_sdTemp'/HHData.dta", dirbase("${l_sdOut}") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'")
 RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
 RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
