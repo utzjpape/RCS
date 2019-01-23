@@ -11,6 +11,7 @@ local sData = "${gsdDataBox}/SOM-SLHS13"
 
 *leave blank for Somaliland and add suffix for Hergeize like _Hergeiza
 local bH = "_Hergeiza"
+local bH = ""
 
 *DEFLATOR to divide nominal expenditures by and poverty line for urban Hargeiza
 *in 2011, $1 USD PPP was worth 10,731 Somali Shillings PPP, & general inflation in Somaliland from 2011 to 2013 was 58.4%
@@ -121,7 +122,7 @@ local nmi = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
 local ndiff = 3
 *methods
-local lmethod = "med avg reg tobit mi_ce mi_mvn"
+local lmethod = "med avg reg tobit mi_ce"
 local using= "${gsdData}/SLD`bH'-HHData.dta"
 local ncoref = 33
 local ncorenf = 25
