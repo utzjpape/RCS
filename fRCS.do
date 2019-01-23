@@ -13,18 +13,31 @@
 *calculate standard error
 capture: program drop fse
 program define fse, rclass
-	args vref vest brelative
-	tempvar d
+	args vref vest
+	tempvar d r_d
 	gen `d' = (`vest' - `vref')
-	if (`brelative'==1) replace `d' = `d' / `vref'
+	gen `r_d' = `d' / `vref'
 	quiet: summ `d'
 	local xb = r(mean)
-	tempvar sd
-	gen `sd' = (`d') ^2
+	quiet: summ `r_d'
+	local r_xb = r(mean)
+	tempvar sd r_sd
+	gen `sd' = (`d')^2
+	gen `r_sd' = (`r_d')^2
 	quiet: summ `sd'
 	local xsd = sqrt(r(mean))
+	quiet: summ `r_sd'
+	local r_xsd = sqrt(r(mean))
+	drop `d' `r_d' `sd' `r_sd'
 	return scalar bias = `xb'
+	*note that se is the same as the rmse
 	return scalar se = `xsd'
+	return scalar rmse = `xsd'
+	return scalar r_bias = `r_xb'
+	return scalar r_se = `r_xsd'
+	*coefficient of variation
+	quiet: summ `vref'
+	return scalar cv = `xsd' / r(mean)
 end
 
 *prepare items in wide format, adding zeros for missings and conserving labels
@@ -770,27 +783,29 @@ program define RCS_analyze
 	local lind = "fgt0 fgt1 fgt2 gini"
 	capture: file close fh
 	file open fh using "`lc_sdOut'/simc`sfsuff'.txt", replace write
-	file write fh "Method" _tab "Bias (HH)" _tab "SE (HH)" _tab "Bias (CL)" _tab "SE (CL)"_tab "Bias (SIM)" _tab "SE (SIM)"_n
+	file write fh "Method" _tab "Bias (HH)" _tab "SE (HH)" _tab "rBias (HH)" _tab "rSE (HH)" _tab "RMSE (HH)" _tab "CV (HH)"
+	file write fh _tab "Bias (CL)" _tab "SE (CL)" _tab "rBias (CL)" _tab "rSE (CL)" _tab "RMSE (CL)" _tab "CV (CL)"
+	file write fh _tab "Bias (SIM)" _tab "SE (SIM)" _tab "rBias (SIM)" _tab "rSE (SIM)" _tab "RMSE (SIM)" _tab "CV (SIM)" _n
 	*add reduced
 	use "`lc_sdTemp'/simd_`: word 1 of `lmethod''.dta", clear
 	quiet: drop `sdrop'
 	file write fh "red"
 	*calculate relative difference at hh-level
 	quiet: gen rd = (red - ref) / ref * 100
-	quiet: fse "ref" "red" 1
-	file write fh _tab (r(bias)) _tab (r(se))
+	quiet: fse "ref" "red"
+	file write fh _tab (r(bias)) _tab (r(se)) _tab (r(r_bias)) _tab (r(r_se)) _tab (r(rmse)) _tab (r(cv))
 	*per EA
 	collapse (mean) red ref [aweight=weight], by(simulation cluster)
 	quiet: gen rd = (red - ref) / ref * 100
-	quiet: fse "ref" "red" 1
-	file write fh _tab (r(bias)) _tab (r(se))
+	quiet: fse "ref" "red"
+	file write fh _tab (r(bias)) _tab (r(se)) _tab (r(r_bias)) _tab (r(r_se)) _tab (r(rmse)) _tab (r(cv))
 	*simulation
 	use "`lc_sdTemp'/simd_`: word 1 of `lmethod''.dta", clear
 	quiet: drop `sdrop'
 	collapse (mean) red ref [aweight=weight], by(simulation)
 	quiet: gen rd = (red - ref) / ref * 100
-	quiet: fse "ref" "red" 1
-	file write fh _tab (r(bias)) _tab (r(se)) _n
+	quiet: fse "ref" "red"
+	file write fh _tab (r(bias)) _tab (r(se)) _tab (r(r_bias)) _tab (r(r_se)) _tab (r(rmse)) _tab (r(cv)) _n
 	*add other methods
 	foreach smethod of local lmethod {
 		use "`lc_sdTemp'/simd_`smethod'.dta", clear
@@ -798,16 +813,16 @@ program define RCS_analyze
 		file write fh "`smethod'"
 		*calculate relative difference at hh-level
 		quiet: gen rd = (est - ref) / ref * 100
-		quiet: fse "ref" "est" 1
-		file write fh _tab (r(bias)) _tab (r(se))
+		quiet: fse "ref" "est"
+		file write fh _tab (r(bias)) _tab (r(se)) _tab (r(r_bias)) _tab (r(r_se)) _tab (r(rmse)) _tab (r(cv))
 		quiet: hist rd if inrange(rd,-100,100) , normal dens xline(0) name("hh_`smethod'",replace) xtitle("Relative Difference, in %") title("Household Estimation Error (`smethod')") note("Bias: `r(bias)'; Standard Error: `r(se)'") graphregion(color(white)) bgcolor(white)
 		graph export "`lc_sdTemp'/hh_rdiff_`smethod'`sfsuff'.png", replace
 		local gl_hh = "`gl_hh' hh_`smethod'"
 		*per EA
 		collapse (mean) est ref [aweight=weight], by(simulation cluster)
 		quiet: gen rd = (est - ref) / ref * 100
-		quiet: fse "ref" "est" 1
-		file write fh _tab (r(bias)) _tab (r(se))
+		quiet: fse "ref" "est"
+		file write fh _tab (r(bias)) _tab (r(se)) _tab (r(r_bias)) _tab (r(r_se)) _tab (r(rmse)) _tab (r(cv))
 		quiet: hist rd if inrange(rd,-100,100) , normal dens xline(0) name("cl_`smethod'",replace) xtitle("Relative Difference, in %") title("Cluster Estimation Error (`smethod')") note("Bias: `r(bias)'; Standard Error: `r(se)'")graphregion(color(white)) bgcolor(white)
 		graph export "`lc_sdTemp'/ea_rdiff_`smethod'`sfsuff'.png", replace
 		local gl_cl = "`gl_cl' cl_`smethod'"
@@ -816,8 +831,8 @@ program define RCS_analyze
 		quiet: drop `sdrop'
 		collapse (mean) est ref [aweight=weight], by(simulation)
 		quiet: gen rd = (est - ref) / ref * 100
-		quiet: fse "ref" "est" 1
-		file write fh _tab (r(bias)) _tab (r(se)) _n
+		quiet: fse "ref" "est"
+		file write fh _tab (r(bias)) _tab (r(se)) _tab (r(r_bias)) _tab (r(r_se)) _tab (r(rmse)) _tab (r(cv)) _n
 		quiet: hist rd if inrange(rd,-100,100) , normal dens xline(0) name("sim_`smethod'",replace) xtitle("Relative Difference, in %") title("Simulation Estimation Error (`smethod')") note("Bias: `r(bias)'; Standard Error: `r(se)'")graphregion(color(white)) bgcolor(white)
 		graph export "`lc_sdTemp'/sim_rdiff_`smethod'`sfsuff'.png", replace
 		local gl_sim = "`gl_sim' sim_`smethod'"
@@ -834,7 +849,10 @@ program define RCS_analyze
 	*analyze consumption distribution with poverty rate and inequality measures
 	capture: file close fh
 	file open fh using "`lc_sdOut'/simp`sfsuff'.txt", replace write
-	file write fh "Method" _tab "FGT0 (Bias)" _tab "FGT0 (SE)" _tab "FGT1 (Bias)" _tab "FGT1 (SE)" _tab "FGT2 (Bias)" _tab "FGT2 (SE)" _tab "Gini (Bias)"  _tab "Gini (SE)" _n
+	file write fh "Method" _tab "FGT0 (Bias)" _tab "FGT0 (SE)" _tab "FGT0 (rBias)" _tab "FGT0 (rSE)" _tab "FGT0 (RMSE)" _tab "FGT0 (CV)" 
+	file write fh _tab "FGT1 (Bias)" _tab "FGT1 (SE)" _tab "FGT1 (rBias)" _tab "FGT1 (rSE)" _tab "FGT1 (RMSE)" _tab "FGT1 (CV)" 
+	file write fh _tab "FGT2 (Bias)" _tab "FGT2 (SE)" _tab "FGT2 (rBias)" _tab "FGT2 (rSE)" _tab "FGT2 (RMSE)" _tab "FGT2 (CV)" 
+	file write fh _tab "Gini (Bias)"  _tab "Gini (SE)" _tab "Gini (rBias)" _tab "Gini (rSE)" _tab "Gini (RMSE)" _tab "Gini (CV)" _n
 	*add reduced aggregated
 	file write fh "red"
 	*prepare dataset
@@ -861,8 +879,8 @@ program define RCS_analyze
 	quiet: foreach sind of local lind {
 		quiet: summ ref_`sind'
 		local ref_mean = r(mean)
-		fse "ref_`sind'" "red_`sind'" 0
-		file write fh _tab (r(bias)) _tab (r(se))
+		fse "ref_`sind'" "red_`sind'"
+		file write fh _tab (r(bias)) _tab (r(se)) _tab (r(r_bias)) _tab (r(r_se)) _tab (r(rmse)) _tab (r(cv))
 	}
 	file write fh _n
 	*add other methods
@@ -893,8 +911,8 @@ program define RCS_analyze
 		quiet: foreach sind of local lind {
 			quiet: summ ref_`sind'
 			local ref_mean = r(mean)
-			fse "ref_`sind'" "est_`sind'" 0
-			file write fh _tab (r(bias)) _tab (r(se))
+			fse "ref_`sind'" "est_`sind'"
+			file write fh _tab (r(bias)) _tab (r(se)) _tab (r(r_bias)) _tab (r(r_se)) _tab (r(rmse)) _tab (r(cv))
 			hist est_`sind' , normal dens xline(`ref_mean') start(0) width(0.01) xscale(range(0 1)) xlabel(0[.25]1) xtitle("`sind'") name("`sind'_`smethod'", replace) title("`sind' (`smethod')") note("Bias: `r(bias)'; Standard Error: `r(se)'") graphregion(color(white)) bgcolor(white)
 			graph export "`lc_sdTemp'/sim_`sind'_`smethod'`sfsuff'.png", replace
 			local gl_`sind' = "`gl_`sind'' `sind'_`smethod'"
