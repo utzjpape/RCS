@@ -116,7 +116,7 @@ mean poor [pweight=weight*hhsize], over(urban)
 *number of modules
 local nmodules = 4
 *number of simulations
-local nsim = 20
+local nsim = 100
 *number of imputations 
 local nmi = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
