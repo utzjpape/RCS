@@ -144,9 +144,10 @@ end
 *local nmodules = 4
 *local ncore = 33
 *local ndiff=3
+*local shares = "demo"
 capture: program drop RCS_partition
 program define RCS_partition
-	syntax varname, hhid(varname) itemid(varname) fweight(varname) hhsize(varname) nmodules(integer) ncore(integer) ndiff(integer) [EGALshare]
+	syntax varname, hhid(varname) itemid(varname) fweight(varname) hhsize(varname) nmodules(integer) ncore(integer) ndiff(integer) [shares(string)]
 	*prepare dataset
 	local xvalue = "`varlist'"
 	local M = `nmodules'
@@ -156,7 +157,7 @@ program define RCS_partition
 	preserve
 	*obtain share of household consumption (either democratic or plutocratic)
 	gen wx = `xvalue' * `fweight'
-	if ("`egalshare'"!="") {
+	if (inlist("`shares'","","demo","democratic")) {
 		bysort `hhid': egen shhx = total(`xvalue')
 		replace shhx = `xvalue' / shhx * `fweight'
 		bysort `itemid': egen sx = total(shhx)
@@ -164,11 +165,22 @@ program define RCS_partition
 		replace sx = sx / cx
 		drop cx shhx
 	}
-	else {
+	else if (inlist("`shares'","pluto","plutocratic")) {
 		bysort `itemid': egen sx = total(wx)
 		bysort `itemid': egen sweight = total(`fweight')
 		replace sx = sx / sweight
 		drop sweight
+	}
+	else if (inlist("`shares'","rnd","rand","random")) {
+		gen ssx = runiform()
+		bysort `itemid': egen sx = total(ssx)
+		bysort `itemid': egen sweight = total(sx)
+		replace sx = sx / sweight
+		drop sweight ssx
+	}
+	else {
+		dis in error "Parameter 'shares' should either be democratic, plutocratic or random."
+		error 1
 	}
 	label var sx "Weighted average household consumption share of item"
 	drop wx
@@ -289,11 +301,20 @@ program define RCS_partition
 	drop xtot
 	label var hhshare "Average Household Consumption Share"
 	label var totshare "Consumption Share of Total Consumption"
-	if ("`egalshare'"!="") {
+	if (inlist("`shares'","","demo","democratic")) {
 		gsort -hhshare
 	}
-	else {
+	else if (inlist("`shares'","pluto","plutocratic")) {
 		gsort -totshare
+	}
+	else if (inlist("`shares'","rnd","rand","random")) {
+		gen xxr = runiform()
+		sort xxr
+		drop xxr
+	}
+	else {
+		dis in error "Parameter 'shares' should either be democratic, plutocratic or random."
+		error 1
 	}
 	*make assignment
 	gen itemmod = .
@@ -317,7 +338,7 @@ end
 
 capture: program drop RCS_prepare
 program define RCS_prepare
-	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) ndiff(integer) [EGALshare]
+	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) ndiff(integer) [shares(string)]
 	*prepare output directories
 	capture: mkdir "`dirbase'"
 	local lc_sdTemp = "`dirbase'/Temp"
@@ -363,7 +384,7 @@ program define RCS_prepare
 	*CREATE PARTITIONS
 	*food partition
 	use "`lc_sdTemp'/HH-Food.dta", clear
-	quiet: RCS_partition xfood, hhid("hhid") itemid("foodid") fweight("weight") hhsize("hhsize") nmodules(`nmodules') ncore(`ncoref') ndiff(`ndiff') `egalshare'
+	quiet: RCS_partition xfood, hhid("hhid") itemid("foodid") fweight("weight") hhsize("hhsize") nmodules(`nmodules') ncore(`ncoref') ndiff(`ndiff') shares(`shares')
 	gen itemcode = foodid
 	order itemcode, before(foodid)
 	export excel using "`lc_sdOut'/FoodConsumption.xls", replace first(var) sheet("Items")
@@ -371,7 +392,7 @@ program define RCS_prepare
 	save "`lc_sdTemp'/fsim_fpartition.dta", replace
 	*non-food partition
 	use "`lc_sdTemp'/HH-NonFood.dta", clear
-	quiet: RCS_partition xnonfood, hhid("hhid") itemid("nonfoodid") fweight("weight") hhsize("hhsize") nmodules(`nmodules') ncore(`ncorenf') ndiff(`ndiff') `egalshare'
+	quiet: RCS_partition xnonfood, hhid("hhid") itemid("nonfoodid") fweight("weight") hhsize("hhsize") nmodules(`nmodules') ncore(`ncorenf') ndiff(`ndiff') shares(`shares')
 	gen itemcode = nonfoodid
 	order itemcode, before(nonfoodid)
 	*save assignment
@@ -987,9 +1008,9 @@ end
 	
 capture: program drop RCS_run
 program define RCS_run
-	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) ndiff(integer) nsim(integer) nmi(integer) lmethod(namelist) povline(real) model(string) [EGALshare] rseed(integer) [Prob(real 1.0)]
+	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) ndiff(integer) nsim(integer) nmi(integer) lmethod(namelist) povline(real) model(string) [shares(string)] rseed(integer) [Prob(real 1.0)]
 	
-	RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') `EGALshare'
+	RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') shares(`shares')
 	RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') prob(`prob')
 	RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model(`model') rseed(`rseed')
 	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
