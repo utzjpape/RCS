@@ -75,9 +75,6 @@ program define RCS_estimate_ri_mi_par
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
-	*prepare dataset
-	qui ds
-	local all_vars `r(varlist)'
 	*calculating number of consumed items
 	egen n1 = rowtotal(bfitem*)
 	gen n1sq = n1*n1

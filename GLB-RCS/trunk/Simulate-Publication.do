@@ -116,7 +116,7 @@ mean poor [pweight=weight*hhsize], over(urban)
 *number of modules
 local nmodules = 4
 *number of simulations
-local nsim = 100
+local nsim = 20
 *number of imputations 
 local nmi = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
@@ -130,6 +130,7 @@ local ndiff=`ndiff'
 local povline = `xpovline`bH'' 
 local lmethod = "`lmethod'"
 local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood urban"
+
 local dirbase = "${gsdOutput}/SLD`bH'-d`ndiff'm`nmodules'"
 local rseed = 23081980
 local prob = 1
@@ -149,23 +150,20 @@ RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`
 
 *run simulation with zero core items
 *number of modules
-local nmodules = 4
-local nsim = 20
+local nmodules = 2
+local nsim = 10
 local nmi = 50
 *methods
-local lmethod = "med avg reg tobit mi_ce"
-local lmethod = "med avg reg tobit"
+local lmethod = "med avg reg tobit mi_ce mi_reg mi_regl"
 local using= "${gsdData}/SLD`bH'-HHData.dta"
 local shares = "demo"
-local ncoref = 33
-local ncoref = 23
-local ncorenf = 25
-local ncorenf = 18
+local ncoref = 5
+local ncorenf = 5
 local ndiff=3
 local povline = `xpovline`bH'' 
 local lmethod = "`lmethod'"
 local model = "hhsize pchild bwork i.hhsex i.hhwater hhcook_5 i.hhtoilet i.hhmaterial i.hhfood urban"
-local dirbase = "${gsdOutput}/SLD`bH'-c23-d`ndiff'm`nmodules'"
+local dirbase = "${gsdOutput}/SLD`bH'-c`ncoref'-`ncorenf'-m`nmodules'-`shares'"
 local rseed = 23081980
 local prob = 1
 
@@ -181,3 +179,8 @@ RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim')
 RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
 RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
 RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
+
+
+*next steps:
+*implement with truncated regression if that works
+*reduce core significantly (to maybe 1 item - though then the quartile is not helpful anymore); distribute items randomly
