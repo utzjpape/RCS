@@ -15,13 +15,13 @@ local model = "hhsize pchild psenior i.hhsex i.hhtoilet i.hhtenure i.hhhouse i.h
 *number of modules
 local nmodules = 3
 *number of simulations (should be 20)
-local nsim = 1
+local nsim = 10
 *number of imputations (should be 50)
 local nmi = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
 local ndiff = 3
 *methods
-local lmethod = "med avg reg tobit mi_ce mi_treg mi_reg mi_regl"
+local lmethod = "med avg reg tobit mi_ce mi_treg mi_reg mi_regl mi_2ce mi_2cel"
 
 *other parameters
 local using= "${gsdData}/KEN-HHData.dta"
@@ -44,7 +44,6 @@ foreach k of local lk {
 	local dirbase = "${gsdOutput}/KEN-c`k'-m`nmodules'"
 	RCS_run using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`k') ndiff(`k') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") povline(`povline') model("`model'") shares(`shares') rseed(`rseed')
 }
-
 
 *how to continue:
 *  just use a core module with all items, and then do out-of-sample prediction and check accuracy depending on sample size
