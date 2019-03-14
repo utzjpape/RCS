@@ -781,13 +781,14 @@ program define RCS_collate
 	}
 end
 	
+*analyzes results based on a given poverty line
 * parameters:
 *   dirbase: folder anchor for files
 *   lmethod: list of methods to analyze
 *   povline: poverty line
 *   urban: -1: no restriction, 0: rural only, 1: urban only
-capture: program drop RCS_analyze
-program define RCS_analyze
+capture: program drop RCS_analyze_pl
+program define RCS_analyze_pl
 	syntax using/, dirbase(string) lmethod(namelist) povline(real) [Urban(integer -1)]
 	*prepare output directories
 	local lc_sdTemp = "`dirbase'/Temp"
@@ -1007,6 +1008,104 @@ program define RCS_analyze
 	reshape long p, i(method) j(x)
 	twoway (line p x, sort), by(method)
 end
+
+*analyzes dataset for all poverty lines	
+* parameters:
+*   dirbase: folder anchor for files
+*   lmethod: list of methods to analyze
+*   urban: -1: no restriction, 0: rural only, 1: urban only
+capture: program drop RCS_analyze
+program define RCS_analyze
+	syntax using/, dirbase(string) lmethod(namelist) povline(real) [Urban(integer -1)]
+	*prepare output directories
+	local lc_sdTemp = "`dirbase'/Temp"
+	local lc_sdOut = "`dirbase'/Out"
+	
+	*configure urban/rural filter
+	local sfsuff = ""
+	local sdrop = " if urban==1-`urban'" 
+	if (`urban'==0) {
+		local sfsuff = "-rural"
+	}
+	else if (`urban'==1) {
+		local sfsuff = "-urban"
+	}	
+	*merge all datasets together
+	use "`lc_sdTemp'/simd_`: word 1 of `lmethod''_imp.dta", clear
+	quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+	drop est
+	foreach smethod of local lmethod {
+		merge 1:1 simulation imputation hhid "`lc_sdTemp'/simd_`smethod'_imp.dta", nogen keepusing(est)
+		ren est `smethod'
+	}
+	quiet: drop `sdrop'
+	save "`lc_sdTemp'/simd_all_imp.dta", replace
+	local lrefredmeth = "ref red `lmethod'"
+	local lredmeth = "red `lmethod'"
+	
+	*analyze FGTs performance with range of poverty lines
+	di "Analyze FGT0 bias for each percentile..."
+	*obtain poverty lines
+	_pctile ref if simulation==1 & imputation==1 [pweight=weight*hhsize], nq(100)
+	forvalues i = 1/100 {
+		local pline`i' = r(r`i')
+	}
+	quiet: replace hhid = hhid * 100 + imputation
+	drop imputation		
+	*calculate FGTs and gini for list of poverty lines
+	forvalues i = 1/100 {
+		foreach v of var `lrefredmeth' {
+			sort simulation `v'
+			by simulation: egen i = seq()
+			by simulation: egen n = max(i)
+			gen x_`i'_`v'_gini = (n + 1 - i) * `v'
+			gen x_`i'_`v'_fgt0 = `v' < `pline`i'' if `v'<.
+			gen x_`i'_`v'_fgt1 = max(`povline`i'' - `v',0) / `povline`i''
+			gen x_`i'_`v'_fgt2 = `v'_fgt1^2
+			drop i n
+		}
+	}
+	collapse (mean) x_* `lrefredmeth' (count) n=hhid [pweight=weight*hhsize], by(simulation)
+	*finalize gini
+	forvalues i = 1/100 {
+		foreach v of var `lrefredmeth' {
+			replace x_`i'_`v'_gini = (n+1-2*x_`i'_`v'_gini / `v') / n
+		}
+	}
+	drop `lrefredmeth' n
+	*get performance statistics
+	local lind = "fgt0 fgt1 fgt2 gini"
+	forvalues i = 1/100 {
+		foreach sm of local lredmeth {
+			foreach ind of local lind {
+				fse x_`i'_ref_`ind' x_`i'_`sm'_`ind'
+				gen p_bias_`i'_`sm'_`ind' = r(bias)
+				gen p_se_`i'_`sm'_`ind' = r(se)
+				gen p_rbias_`i'_`sm'_`ind' = r(rbias)
+				gen p_rse_`i'_`sm'_`ind' = r(rse)
+				gen p_rmse_`i'_`sm'_`ind' = r(rmse)
+				gen p_cv_`i'_`sm'_`ind' = r(cv)				
+			}
+		}
+	}
+	*organize
+	reshape long x_*_ p_*_, i(simulation) j(indicator) string
+	ren (x_*_ p_*_) (x_* p_*)
+	ren x_*_ref r_*
+	reshape long x_?_*_ x_??_*_ x_???_*_ p*_?_*_ p*_??_*_ p*_???_*_, i(simulation indicator) j(method) string
+	
+	
+	
+	ren (x_*_ p_*_) (x* p*)
+	reshape long x*, i(simulation indicator method) j(i)
+	
+
+
+	*show graph
+	import delimited "`lc_sdOut'/simfgt0`sfsuff'.txt", clear
+	reshape long p, i(method) j(x)
+	twoway (line p x, sort), by(method)
+end
 	
 capture: program drop RCS_run
 program define RCS_run
@@ -1016,5 +1115,5 @@ program define RCS_run
 	RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') prob(`prob')
 	RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model(`model') rseed(`rseed')
 	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
-	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
+	RCS_analyze_pline using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
 end
