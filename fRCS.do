@@ -1115,5 +1115,5 @@ program define RCS_run
 	RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') prob(`prob')
 	RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model(`model') rseed(`rseed')
 	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
-	RCS_analyze_pline using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
+	RCS_analyze_pl using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
 end
