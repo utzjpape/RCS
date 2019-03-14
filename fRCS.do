@@ -147,7 +147,7 @@ end
 *local shares = "demo"
 capture: program drop RCS_partition
 program define RCS_partition
-	syntax varname, hhid(varname) itemid(varname) fweight(varname) hhsize(varname) nmodules(integer) ncore(integer) ndiff(integer) [shares(string)]
+	syntax varname, hhid(varname) itemid(varname) fweight(varname) hhsize(varname) nmodules(integer) ncore(integer) [ndiff(integer 3) shares(string)]
 	*prepare dataset
 	local xvalue = "`varlist'"
 	local M = `nmodules'
@@ -338,7 +338,7 @@ end
 
 capture: program drop RCS_prepare
 program define RCS_prepare
-	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) ndiff(integer) [shares(string)]
+	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) [ndiff(integer 3) shares(string)]
 	*prepare output directories
 	capture: mkdir "`dirbase'"
 	local lc_sdTemp = "`dirbase'/Temp"
@@ -641,8 +641,10 @@ program define RCS_estimate
 	set seed `rseed'
 	*start iteration over simulations
 	forvalues isim = 1 / `N' {
+		di "Entering simulation `isim':"
 		*ESTIMATE BASED ON DIFFERENT METHODS
 		foreach smethod of local lmethod {
+			di " ... for `smethod' ..."
 			*change directory to make sure we are in a writable directory for some mi commands
 			quiet: cd "`lc_sdTemp'"
 			*load prepared dataset for mi
@@ -662,7 +664,7 @@ program define RCS_estimate
 			}
 			*method selection
 			local mipre = ""
-			RCS_estimate_`smethod' , nmodules(`nmodules') nmi(`nmi') model("`model'")
+			quiet: RCS_estimate_`smethod' , nmodules(`nmodules') nmi(`nmi') model("`model'")
 			*check if mi dataset
 			quiet: mi query
 			if "`r(style)'"!="" local mipre = "mi passive:"
@@ -1008,7 +1010,7 @@ end
 	
 capture: program drop RCS_run
 program define RCS_run
-	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) ndiff(integer) nsim(integer) nmi(integer) lmethod(namelist) povline(real) model(string) [shares(string)] rseed(integer) [Prob(real 1.0)]
+	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) nsim(integer) nmi(integer) lmethod(namelist) povline(real) model(string) [ndiff(integer 3) shares(string)] rseed(integer) [Prob(real 1.0)]
 	
 	RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') shares(`shares')
 	RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') prob(`prob')
