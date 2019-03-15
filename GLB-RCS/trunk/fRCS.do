@@ -1016,7 +1016,7 @@ end
 *   urban: -1: no restriction, 0: rural only, 1: urban only
 capture: program drop RCS_analyze
 program define RCS_analyze
-	syntax using/, dirbase(string) lmethod(namelist) povline(real) [Urban(integer -1)]
+	syntax using/, dirbase(string) lmethod(namelist) [Urban(integer -1)]
 	*prepare output directories
 	local lc_sdTemp = "`dirbase'/Temp"
 	local lc_sdOut = "`dirbase'/Out"
@@ -1031,18 +1031,21 @@ program define RCS_analyze
 		local sfsuff = "-urban"
 	}	
 	*merge all datasets together
-	use "`lc_sdTemp'/simd_`: word 1 of `lmethod''_imp.dta", clear
-	quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
-	drop est
-	foreach smethod of local lmethod {
-		merge 1:1 simulation imputation hhid "`lc_sdTemp'/simd_`smethod'_imp.dta", nogen keepusing(est)
-		ren est `smethod'
+	quiet {
+		use "`lc_sdTemp'/simd_`: word 1 of `lmethod''_imp.dta", clear
+		drop est
+		ren ref est
+		save "`lc_sdTemp'/simd_ref_imp.dta", replace
+		ren est ref
+		ren red est
+		save "`lc_sdTemp'/simd_red_imp.dta", replace
+		drop est
+		drop `sdrop'
+		merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+		compress
 	}
-	quiet: drop `sdrop'
-	save "`lc_sdTemp'/simd_all_imp.dta", replace
 	local lrefredmeth = "ref red `lmethod'"
 	local lredmeth = "red `lmethod'"
-	
 	*analyze FGTs performance with range of poverty lines
 	di "Analyze FGT0 bias for each percentile..."
 	*obtain poverty lines
@@ -1050,70 +1053,136 @@ program define RCS_analyze
 	forvalues i = 1/100 {
 		local pline`i' = r(r`i')
 	}
-	quiet: replace hhid = hhid * 100 + imputation
-	drop imputation		
 	*calculate FGTs and gini for list of poverty lines
-	forvalues i = 1/100 {
-		foreach v of var `lrefredmeth' {
-			sort simulation `v'
-			by simulation: egen i = seq()
-			by simulation: egen n = max(i)
-			gen x_`i'_`v'_gini = (n + 1 - i) * `v'
-			gen x_`i'_`v'_fgt0 = `v' < `pline`i'' if `v'<.
-			gen x_`i'_`v'_fgt1 = max(`povline`i'' - `v',0) / `povline`i''
-			gen x_`i'_`v'_fgt2 = `v'_fgt1^2
-			drop i n
+	di "  Calculating FGT and Gini: " _newline "  " _continue
+	foreach v of local lrefredmeth {
+		di "`v' " _continue
+		*prepare dataset
+		use "`lc_sdTemp'/simd_`v'_imp.dta", clear
+		quiet: drop `sdrop'
+		quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+		quiet summ imputation
+		local b = 10^ceil(log10(r(max)))
+		quiet: replace hhid = hhid * `b' + imputation
+		drop imputation		
+		*calculate FGT and gini
+		sort simulation est
+		quiet: by simulation: egen i = seq() if ~missing(est)
+		quiet: by simulation: egen n = max(i) if ~missing(est)
+		quiet: gen x_gini = (n + 1 - i) * est  if ~missing(est)
+		drop i n
+		quiet forvalues i = 1/100 {
+			gen x_fgt0_i`i' = est < `pline`i''  if ~missing(est)
+			gen x_fgt1_i`i' = max(`pline`i'' - est,0) / `pline`i'' if ~missing(est)
+			gen x_fgt2_i`i' = x_fgt1_i`i'^2 if ~missing(est)
 		}
+		collapse (mean) x_* est (count) n=hhid [pweight=weight*hhsize], by(simulation)
+		*finalize gini
+		quiet: replace x_gini = (n+1-2*x_gini / est) / n
+		drop est n
+		save "`lc_sdTemp'/simd_`v'_stats.dta", replace
 	}
-	collapse (mean) x_* `lrefredmeth' (count) n=hhid [pweight=weight*hhsize], by(simulation)
-	*finalize gini
-	forvalues i = 1/100 {
-		foreach v of var `lrefredmeth' {
-			replace x_`i'_`v'_gini = (n+1-2*x_`i'_`v'_gini / `v') / n
-		}
-	}
-	drop `lrefredmeth' n
 	*get performance statistics
-	local lind = "fgt0 fgt1 fgt2 gini"
-	forvalues i = 1/100 {
-		foreach sm of local lredmeth {
-			foreach ind of local lind {
-				fse x_`i'_ref_`ind' x_`i'_`sm'_`ind'
-				gen p_bias_`i'_`sm'_`ind' = r(bias)
-				gen p_se_`i'_`sm'_`ind' = r(se)
-				gen p_rbias_`i'_`sm'_`ind' = r(rbias)
-				gen p_rse_`i'_`sm'_`ind' = r(rse)
-				gen p_rmse_`i'_`sm'_`ind' = r(rmse)
-				gen p_cv_`i'_`sm'_`ind' = r(cv)				
+	di "  Calculating peformance indicators..."
+	quiet quiet foreach sm of local lredmeth {
+		use "`lc_sdTemp'/simd_ref_stats.dta", clear
+		ren x_* r_*
+		merge 1:1 simulation using "`lc_sdTemp'/simd_`sm'_stats.dta", assert(match) keep(match) nogen		
+		fse r_gini x_gini
+		gen p_bias_gini = r(bias)
+		gen p_se_gini = r(se)
+		gen p_rbias_gini = r(rbias)
+		gen p_rse_gini = r(rse)
+		gen p_rmse_gini = r(rmse)
+		gen p_cv_gini = r(cv)
+		local stubs = ""
+		foreach ind in fgt0 fgt1 fgt2 {
+			local stubs = "`stubs' x_`ind'_i r_`ind'_i"
+			forvalues i = 1/100 {
+				fse r_`ind'_i`i' x_`ind'_i`i'
+				gen p_bias_`ind'_i`i' = r(bias)
+				gen p_se_`ind'_i`i' = r(se)
+				gen p_rbias_`ind'_i`i' = r(rbias)
+				gen p_rse_`ind'_i`i' = r(rse)
+				gen p_rmse_`ind'_i`i' = r(rmse)
+				gen p_cv_`ind'_i`i' = r(cv)
 			}
+			local stubs = "`stubs' p_bias_`ind'_i p_se_`ind'_i p_rbias_`ind'_i p_rse_`ind'_i p_rmse_`ind'_i p_cv_`ind'_i"
 		}
+		*reorganize
+		reshape long `stubs', i(simulation) j(i)
+		ren *_i *
+		reshape long r_ x_ p_bias_ p_se_ p_rbias_ p_rse_ p_rmse_ p_cv_, i(simulation i) j(indicator) string
+		ren *_ *
+		gen method = "`sm'"
+		label var i "poverty line percentile"
+		label var r "reference value"
+		label var x "estimated value"
+		order method, after(i)
+		save "`lc_sdTemp'/simd_`sm'_pstats.dta", replace
 	}
-	*organize
-	reshape long x_*_ p_*_, i(simulation) j(indicator) string
-	ren (x_*_ p_*_) (x_* p_*)
-	ren x_*_ref r_*
-	reshape long x_?_*_ x_??_*_ x_???_*_ p*_?_*_ p*_??_*_ p*_???_*_, i(simulation indicator) j(method) string
-	
-	
-	
-	ren (x_*_ p_*_) (x* p*)
-	reshape long x*, i(simulation indicator method) j(i)
-	
-
-
-	*show graph
-	import delimited "`lc_sdOut'/simfgt0`sfsuff'.txt", clear
-	reshape long p, i(method) j(x)
-	twoway (line p x, sort), by(method)
+	*assemble
+	use "`lc_sdTemp'/simd_red_pstats.dta", clear
+	quiet foreach sm of local lmethod {
+		append using "`lc_sdTemp'/simd_`sm'_pstats.dta"
+	}
+	save "`lc_sdTemp'/simd_pstats.dta", replace
+	*output table for differences with reference
+	quiet {
+		gen d = x - r
+		gen dabs = abs(d)
+		collapse (mean) d dabs p_*, by(method indicator i)
+		*produce graph
+		encode method, gen(imethod)
+		encode indicator, gen(iindicator)
+		gen int id = imethod * 1000 + iindicator
+		levelsof id, local(lid)
+		foreach id of local lid {
+			local j = floor(`id'/1000)
+			label define id `id' "`:label imethod `j''", modify
+		}
+		label values id id
+		label var d "deviation"
+		tsset id i
+		local gcmb = ""
+		local legend = ""
+	}
+	foreach ind in fgt0 fgt1 fgt2 gini {
+		xtline d if indicator=="`ind'", overlay name(g`ind') ylabel(,angle(0)) title("`ind'") `legend'
+		local legend = "legend(off)"
+		local gcmb = "`gcmb' g`ind'"
+	}
+	capture which grc1leg2
+	if _rc==111 {
+		graph combine `gcmb'
+	}
+	else {
+		grc1leg2 `gcmb'
+	}
+	graph export "`lc_sdOut'/fgt`sfsuff'.png", replace	
+	graph drop `gcmb'
+	graph bar (mean) dabs, over(method, label(angle(45))) over(indicator) title("Average Absolute Deviation") ylabel(,angle(0)) ytitle("") name(g_dabs)
+	graph export "`lc_sdOut'/fgt-avg`sfsuff'.png", replace
+	export excel "`lc_sdOut'/fgt`sfsuff'.xls", replace sheet("Percentiles") firstrow(var)
+	collapse (mean) d dabs p_*, by(method indicator)
+	export excel "`lc_sdOut'/fgt`sfsuff'.xls", sheetreplace sheet("Averages") firstrow(var)
+	*output average performance statistics
+	use "`lc_sdTemp'/simd_pstats.dta", clear
+	drop r x
+	quiet: reshape long p_, i(simulation i indicator method) j(metric) string
+	ren p_ p
+	collapse (mean) p, by(i method indicator metric)
+	graph bar (mean) p, over(method, label(angle(45) labsize(tiny))) over(indicator) by(metric, yrescale) ylabel(,angle(0)) name(g_metric)
+	graph export "`lc_sdOut'/metrics`sfsuff'.png", replace
 end
 	
 capture: program drop RCS_run
 program define RCS_run
-	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) nsim(integer) nmi(integer) lmethod(namelist) povline(real) model(string) [ndiff(integer 3) shares(string)] rseed(integer) [Prob(real 1.0)]
+	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) nsim(integer) nmi(integer) lmethod(namelist) model(string) [ndiff(integer 3) shares(string)] rseed(integer) [Prob(real 1.0)]
 	
 	RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') shares(`shares')
 	RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') prob(`prob')
 	RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model(`model') rseed(`rseed')
 	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
-	RCS_analyze_pl using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')
+	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'")
 end
