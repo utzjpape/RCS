@@ -141,17 +141,14 @@ end
 *local itemid = "foodid"
 *local fweight= "weight"
 *local hhsize = "hhsize"
-*local nmodules = 4
-*local ncore = 33
-*local ndiff=3
-*local shares = "demo"
+*local ncore = `ncoref'
 capture: program drop RCS_partition
 program define RCS_partition
 	syntax varname, hhid(varname) itemid(varname) fweight(varname) hhsize(varname) nmodules(integer) ncore(integer) [ndiff(integer 3) shares(string)]
 	*prepare dataset
 	local xvalue = "`varlist'"
-	local M = `nmodules'
 	local ncore = `ncore'
+	local M = `nmodules'
 	local pc = "_pc"
 	*preserve dataset
 	preserve
@@ -222,11 +219,13 @@ program define RCS_partition
 		drop r`id'
 	}
 	ren rr* r*
-	*calculate total consumption
-	egen tc = rowtotal(c_x*)
+	*calculate total consumption; capture for ncore=0
+	capture: gen tc = rowtotal(c_x*)
+	if _rc == 133 gen tc =0
 	egen tnc = rowtotal(nc_x*)
 	gen t = tc + tnc
-	egen tc_pc = rowtotal(c_x*_pc)
+	capture: egen tc_pc = rowtotal(c_x*_pc)
+	if _rc == 111 gen tc_pc =0
 	egen tnc_pc = rowtotal(nc_x*_pc)
 	gen t_pc = tc_pc + tnc_pc
 	*get maximum number of variables per module
@@ -529,14 +528,15 @@ program define RCS_mask
 		drop r
 		*create module consumption
 		forvalues kmod = 0/`M' {
-			quiet: bysort hhid itemmod: egen cxfood`kmod' = total(xfood) if (itemmod==`kmod') & ((`kmod'==0) | (hhmod==`kmod'))
+			capture: bysort hhid itemmod: egen cxfood`kmod' = total(xfood) if (itemmod==`kmod') & ((`kmod'==0) | (hhmod==`kmod'))
 			quiet: bysort hhid: egen xfcons`kmod' = max(cxfood`kmod')
 			drop cxfood`kmod'
 		}
+		replace cxfood0 = 0 if missing(cxfood0)
 		*make items columns and one record per hh
 		ren xfood xfitem
 		drop itemmod
-		quiet: reshape wide xfitem bfitem, i(hhid hhmod weight xfcons*) j(foodid)
+		quiet: reshape wide xfitem bfitem, i(hhid hhmod weight) j(foodid)
 		keep hhid hhmod weight xfcons* xfitem* bfitem* 
 		order hhid hhmod weight xfcons* xfitem* bfitem*
 		*ensure assigned modules are not missing and non-assigned are missing
@@ -589,7 +589,7 @@ program define RCS_mask
 		*make items columns and one record per hh
 		ren xnonfood xnfitem
 		drop itemmod
-		quiet: reshape wide xnfitem bnfitem, i(hhid hhmod weight xnfcons*) j(nonfoodid)
+		quiet: reshape wide xnfitem bnfitem, i(hhid hhmod weight) j(nonfoodid)
 		keep hhid hhmod weight xnfcons* xnfitem* bnfitem* 
 		order hhid hhmod weight xnfcons* xnfitem* bnfitem*
 		*ensure assigned modules are not missing and non-assigned are missing

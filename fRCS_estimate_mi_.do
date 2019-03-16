@@ -93,6 +93,9 @@ program define RCS_estimate_mi_reg
 		replace y = .01 if y<=0
 		replace y = log(y)
 	}
+	*get models degrees of freedom and make sure we have sufficient observation
+	*quiet: reg y i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model'
+	*local df = e(df_m)
 	*run MI
 	mi set wide
 	mi register imputed y y_0
