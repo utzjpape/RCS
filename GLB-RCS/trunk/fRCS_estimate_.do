@@ -42,14 +42,17 @@ program define RCS_estimate_tobit
 	local M = `nmodules'
 	local nI = `nmi'
 	*start estimation
-	quiet: forvalues imod = 1/`M' {
+	quiet forvalues imod = 1/`M' {
 		*food
-		tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0)
+		capture: tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0)
+		*if insufficient sample size, remove cluster variables
+		if (_rc == 2000) tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' [aweight=weight], ll(0)
 		predict y`imod'_pc if xfcons`imod'_pc>=.
 		replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
 		drop y`imod'_pc
 		*non-food
-		tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0)
+		capture: tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' i.cluster [aweight=weight], ll(0)
+		if (_rc == 2000) tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `model' [aweight=weight], ll(0)
 		predict y`imod'_pc if xnfcons`imod'_pc>=.
 		replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
 		drop y`imod'_pc
