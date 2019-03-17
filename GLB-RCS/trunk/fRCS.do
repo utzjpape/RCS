@@ -532,7 +532,7 @@ program define RCS_mask
 			quiet: bysort hhid: egen xfcons`kmod' = max(cxfood`kmod')
 			drop cxfood`kmod'
 		}
-		replace cxfood0 = 0 if missing(cxfood0)
+		replace xfcons0 = 0 if missing(xfcons0)
 		*make items columns and one record per hh
 		ren xfood xfitem
 		drop itemmod
@@ -586,6 +586,7 @@ program define RCS_mask
 			quiet: bysort hhid: egen xnfcons`kmod' = max(cxnfood`kmod')
 			drop cxnfood`kmod'
 		}
+		replace xnfcons0 = 0 if missing(xnfcons0)
 		*make items columns and one record per hh
 		ren xnonfood xnfitem
 		drop itemmod
