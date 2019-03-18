@@ -743,7 +743,7 @@ program define RCS_estimate
 			quiet: cd "`lc_sdTemp'"
 			*load prepared dataset for mi
 			use "`lc_sdTemp'/mi_`isim'.dta", clear
-			xi i.strata `mcat' i.pxdurables_pc
+			quiet: xi i.strata `mcat' i.pxdurables_pc
 			*prepare variables
 			quiet: gen xcons_pc = .
 			quiet: gen xfcons_pc = .
