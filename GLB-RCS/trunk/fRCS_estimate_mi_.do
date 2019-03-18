@@ -43,7 +43,7 @@ end
 capture: program drop RCS_estimate_mi_treg
 program define RCS_estimate_mi_treg
 	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
-	RCS_estimate_mi_reg , nmodules(`nmodules') nmi(`nmi') model(`model') logmodel(`logmodel') log reg(truncated)
+	RCS_estimate_mi_reg , nmodules(`nmodules') nmi(`nmi') model(`model') logmodel(`logmodel') reg(truncated)
 end
 
 *truncated regressions with multiple imputations
