@@ -42,7 +42,8 @@ foreach k of local lk {
 	local ncoref = `k'
 	local ncorenf = `k'
 	local dirbase = "${gsdOutput}/KEN-c`k'-m`nmodules'"
-	RCS_run using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`k') ndiff(`k') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") povline(`povline') model("`model'") shares(`shares') rseed(`rseed')
+	*RCS_run using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`k') ndiff(`k') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") shares(`shares') rseed(`rseed')
+	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") 
 }
 
 *how to continue:
