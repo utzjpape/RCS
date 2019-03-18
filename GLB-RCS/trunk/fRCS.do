@@ -730,9 +730,14 @@ program define RCS_estimate
 			matrix B = A[1...,colnumb("A","k")],A[1...,colnumb("A","AICC")]
 			mata vselect_best("B","k")
 			local `m' = r(best`k')
+			*output regression
+			eststo: quietly reg `m' ``m'' i.hhmod i.pxdurables_pc [pweight=weight]
 			drop `m'
 		}
 	}
+	esttab , r2 ar2 aic
+	esttab using "`lc_sdOut'/Model.csv", r2 ar2 aic replace
+	eststo clear
 	*start iteration over simulations
 	forvalues isim = 1 / `N' {
 		di "Entering simulation `isim':"
