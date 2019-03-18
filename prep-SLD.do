@@ -64,20 +64,41 @@ collapse (count) hhsize=age (sum) nchild=age_child nadult=age_adult nsenior=age_
 merge 1:1 hhid using "`sData'/data_h_proc_public.dta", nogen assert(match) keep(match) keepusing(S13_G01 S13_G03A S13_G04_* S13_G05 S13_G07 S13_G10 S13_G15 S13_G24 S13_G26)
 ren (S13_G01 S13_G03A S13_G05 S13_G07 S13_G10 S13_G15 S13_G24 S13_G26) (hhhouse hhwater hhtoilet hhmaterial hhmode hhplot hhfood hhsleep)
 ren S13_G04_* hhcook_*
+foreach v of var hhcook_* {
+	replace `v' = 0 if missing(`v')
+}
+replace hhcook_6 = 1 if hhcook_4==1
+label var hhcook_7 "Eletric stove or plate"
+replace hhcook_1 = 1 if hhcook_7==1 | hhcook_99==1 | hhcook_2==1 | hhcook_3==1 | missing(hhcook_1)
+label var hhcook_1 "Oven with wood or other"
+*only allow one Yes
+replace hhcook_2 = 0 if hhcook_5==1
+replace hhcook_3 = 0 if hhcook_5==1
+replace hhcook_5 = 0 if hhcook_6==1
 drop hhcook_7 hhcook_99 hhcook_4
+gen hhcook = hhcook_1 + 5*hhcook_5 + 6*hhcook_6
+replace hhcook = 1 if hhcook == 0 | missing(hhcook)
+foreach i in 1 5 6 {
+	label define lhhcook `i' "`: var label hhcook_`i''", modify
+}
+label values hhcook lhhcook
+drop hhcook_*
 *simplify by setting missing values to conservative answers
-recode hhhouse (99=7) (.=7)
-recode hhwater (99=8) (.=8) (5=8)
+recode hhhouse (99=7) (.=7) (3 5 = 7) (6=4)
+recode hhwater (99=8) (.=8) (5 7=8) (1 2 3 = 1)
 recode hhtoilet (99=2) (.=2) (4=3)
 recode hhsleep (99=2) (.=2)
 recode hhmaterial (99=5) (.=5) (4=5)
-recode hhmode (5=4) (99=4) (.=4) (3=4)
-recode hhfood (99=2) (.=4)
+recode hhmode (5=4) (99=4) (.=4) (3=4) (2=1)
+recode hhfood (99=2) (.=2)
 *add variables
 gen pchild = nchild / hhsize
 gen psenior = nsenior / hhsize
 gen pwork = nwork / hhsize
 gen bwork = nwork>0
+*prepare variable names for model selection
+rename (nchild nadult nsenior nwork hhsex pchild psenior pwork bwork) (mcon_=)
+rename (hhhouse hhcook hhwater hhtoilet hhmaterial hhmode hhplot hhfood hhsleep) (mcat_=)
 *add durables and food and non-food
 merge 1:1 hhid using "`sData'/wfilez.dta", nogen keep(match) keepusing(rdurables_pc urban)
 ren rdurables_pc xdurables_pc
@@ -88,7 +109,8 @@ if ("`bH'"!="") {
 	drop if strata !=1
 }
 *remove a few records (e.g. without consumption)
-drop if missing(hhcook_1)
+order hhid cluster strata urban weight hhsize mcon_* mcat_* 
+drop if missing(xdurables_pc)
 save "${gsdData}/SLD`bH'-HHData.dta", replace
 
 *check whether we can reconstruct the consumption aggregate at the item level

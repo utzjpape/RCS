@@ -3,7 +3,7 @@
 *use the average to estimate missing consumption
 capture: program drop RCS_estimate_avg
 program define RCS_estimate_avg
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -20,7 +20,7 @@ end
 *use the median to estimate missing consumption
 capture: program drop RCS_estimate_med
 program define RCS_estimate_med
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -37,7 +37,7 @@ end
 *use the tobit to estimate missing consumption
 capture: program drop RCS_estimate_tobit
 program define RCS_estimate_tobit
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -62,7 +62,7 @@ end
 *use the tobit to estimate missing consumption
 capture: program drop RCS_estimate_reg
 program define RCS_estimate_reg
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'

@@ -47,24 +47,48 @@ collapse (sum) xnonfood, by(hhid nonfoodid)
 fItems2RCS, hhid(hhid) itemid(nonfoodid) value(xnonfood) red(0)
 save "${gsdTemp}/KEN-HH-NonFoodItems.dta", replace
 
+*get household member information: education and labor
+use "`sData'/Section C education.dta", clear
+ren c06 edu
+recode edu (5=3) (4=2) (7/10=8) (6=11)
+gen lit = c24!=1 if !missing(c24)
+keep id_clu id_hh b_id edu lit
+tempfile fedu
+save "`fedu'", replace
+*labor
+use "`sData'/Section E Labour.dta", clear
+ren e_id b_id
+ren e04 wor
+recode wor (.=0) (2 3=3) (5/9=0)
+keep id_clu id_hh b_id wor
+tempfile fwor
+save "`fwor'", replace
+
 *get household characteristics
 use "`sData'/Section_B_Household_member_Information.dta", clear
 gen hhsex = b04 if b03==1
 ren b05a age
-keep hhsex age id_*
+merge 1:1 id_clu id_hh b_id using "`fedu'", nogen keep(master match) keepusing(edu lit)
+gen hhedu = edu if b03==1
+gen hhlit = lit if b03==1
+merge 1:1 id_clu id_hh b_id using "`fwor'", nogen keep(master match) keepusing(wor)
+gen hhwor = wor if b03==1
+keep hhsex age id_* b_id hhedu hhlit hhwor
 gen age_child = age<15 if age<.
 gen age_adult = inrange(age,15,64) if age<.
 gen age_senior = age>64 if age<.
-collapse (count) hhsize=age (sum) nchild=age_child nadult=age_adult nsenior=age_senior (firstnm) hhsex, by(id_clu id_hh)
+collapse (count) hhsize=age (sum) nchild=age_child nadult=age_adult nsenior=age_senior (firstnm) hhsex hhedu hhlit hhwor, by(id_clu id_hh)
+replace hhedu = 1 if missing(hhedu)
+replace hhlit = 0 if missing(hhlit)
+replace hhwor = 0 if missing(hhwor)
 merge 1:1 id_clu id_hh using "`sData'/Section_G_Housing.dta", nogen keep(match) keepusing(g01 g08a g09a g11 g16 g18 weights)
 ren (g01 g08a g09a g11 g16 g18) (hhtenure hhunits hhrooms hhhouse hhcook hhtoilet)
 ren weights weight
 *simplify by setting missing values to conservative answers
 gen hhid = id_clust * 10000 + id_hh
-recode hhhouse (99=7) (.=7)
+recode hhhouse (99=7) (.=7) (3 = 2)
 recode hhtoilet (99=2) (.=2)
 recode hhtenure (1/2=1) (3/6=2) (.=2)
-recode hhhouse (1/3=1) (4/7=2)
 recode hhcook (1/2=1) (3/8=2) (.=2)
 *assign average number of rooms (2) to missing
 recode hhrooms (9/30=8) (.=2)
@@ -88,6 +112,9 @@ egen ctnf = rowtotal(xnonfood*)
 drop if missing(ctf) | missing(ctnf) | (ctf==0)
 drop ctf ctnf
 gen urban=(strata==2)
+*prepare variable names for model selection
+rename (nchild nadult nsenior hhsex hhtoilet hhtenure hhcook hhrooms pchild psenior hhlit) (mcon_=)
+rename (hhhouse hhedu hhwor) (mcat_=)
 save "${gsdData}/KEN-HHData.dta", replace
 
 *check whether we can reconstruct the consumption aggregate at the item level
@@ -99,5 +126,7 @@ egen ctnf = rowtotal(xnonfood*)
 gen poor = (ctf+ctnf+xdurables)/hhsize < `xpovline'
 mean poor [pweight=weight*hhsize]
 mean poor [pweight=weight*hhsize], over(strata)
-local model = "hhsize pchild psenior i.hhsex i.hhtoilet i.hhtenure i.hhhouse i.hhcook hhrooms i.strata"
+local model = "hhsize mcon_pchild mcon_psenior i.mcon_hhsex i.mcat_hhedu i.mcat_hhwor mcon_hhlit i.mcon_hhtoilet i.mcon_hhtenure i.mcat_hhhouse i.mcon_hhcook mcon_hhrooms i.strata"
 reg y2_i `model'
+gen ly2_i = log(y2_i)
+reg ly2_i `model'

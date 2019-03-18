@@ -3,7 +3,7 @@
 *use Multi-variate normal imputation using MCMC
 capture: program drop RCS_estimate_mi_mvn
 program define RCS_estimate_mi_mvn
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -19,7 +19,7 @@ end
 *using chained equations
 capture: program drop RCS_estimate_mi_ce
 program define RCS_estimate_mi_ce
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -35,29 +35,29 @@ end
 *log regressions with multiple imputations
 capture: program drop RCS_estimate_mi_regl
 program define RCS_estimate_mi_regl
-	syntax , nmodules(integer) nmi(integer) model(string)
-	RCS_estimate_mi_reg , nmodules(`nmodules') nmi(`nmi') model(`model') log
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
+	RCS_estimate_mi_reg , nmodules(`nmodules') nmi(`nmi') model(`model') logmodel(`logmodel') log
 end
 
 *truncated regressions with multiple imputations
 capture: program drop RCS_estimate_mi_treg
 program define RCS_estimate_mi_treg
-	syntax , nmodules(integer) nmi(integer) model(string)
-	RCS_estimate_mi_reg , nmodules(`nmodules') nmi(`nmi') model(`model') log reg(truncated)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
+	RCS_estimate_mi_reg , nmodules(`nmodules') nmi(`nmi') model(`model') logmodel(`logmodel') log reg(truncated)
 end
 
 *truncated regressions with multiple imputations
 capture: program drop RCS_estimate_mi_2ce
 program define RCS_estimate_mi_2ce
-	syntax , nmodules(integer) nmi(integer) model(string)
-	RCS_estimate_mi_reg , nmodules(`nmodules') nmi(`nmi') model(`model') reg(twostep)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
+	RCS_estimate_mi_reg , nmodules(`nmodules') nmi(`nmi') model(`model') logmodel(`logmodel') reg(twostep)
 end
 
 *truncated regressions with multiple imputations
 capture: program drop RCS_estimate_mi_2cel
 program define RCS_estimate_mi_2cel
-	syntax , nmodules(integer) nmi(integer) model(string)
-	RCS_estimate_mi_reg , nmodules(`nmodules') nmi(`nmi') model(`model') log reg(twostep)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
+	RCS_estimate_mi_reg , nmodules(`nmodules') nmi(`nmi') model(`model') logmodel(`logmodel') log reg(twostep)
 end
 
 *regression but with multiple imputations
@@ -72,10 +72,14 @@ end
 *      twostep: use a two-step MICE approach to predict consumption based on whether consumed
 capture: program drop RCS_estimate_mi_reg
 program define RCS_estimate_mi_reg
-	syntax , nmodules(integer) nmi(integer) model(string) [log REGfunc(string)]
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string) [log REGfunc(string)]
 	if ("`regfunc'"=="") local regfunc = "normal"
 	if !inlist("`regfunc'","normal","truncated","twostep") {
-		di "In RCS_estimate_mi_reg the parameter 'regfunc' must be 'normal', 'truncated' or 'twostep'."
+		di as error "In RCS_estimate_mi_reg the parameter 'regfunc' must be 'normal', 'truncated' or 'twostep'."
+		error 1
+	}
+	if ("`regfunc'"=="truncated") & ("`log'"!="") {
+		di as error "In RCS_estimate_mi_reg, function cannot be called in truncated option with log switched on."
 		error 1
 	}
 	*prepare output directories
@@ -100,16 +104,19 @@ program define RCS_estimate_mi_reg
 	mi set wide
 	mi register imputed y y_0
 	mi register regular imod food
-	mi register regular hh* cluster strata pchild psenior cfcons_pc cnfcons_pc pxfcons0_pc pxnfcons0_pc pxdurables_pc
+	mi register regular hh* cluster strata mcon* _I* cfcons_pc cnfcons_pc pxfcons0_pc pxnfcons0_pc pxdurables_pc
 	*run ols or truncated regression
 	if ("`regfunc'"=="normal") {
-		mi impute regress y = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', add(`nI') by(imod food)
+		mi impute regress y = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc ``log'model', add(`nI') by(imod food)
 	}
 	else if ("`regfunc'"=="truncated") {
-		mi impute truncreg y = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', ll(0) add(`nI') by(imod food)
+		*replace zeros as they cannot be considered in the regression (can't be called as log)
+		summ y if y>0
+		replace y = r(min) if y==0
+		mi impute truncreg y = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `log'`model', ll(0) add(`nI') by(imod food)
 	}
 	else if ("`regfunc'"=="twostep") {
-		mi impute chained (logit) y_0 (reg, cond(if y_0==0)) y = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', add(`nI') by(imod food)
+		mi impute chained (logit) y_0 (reg, cond(if y_0==0)) y = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc ``log'model', add(`nI') by(imod food)
 	}
 	*transform into household-level dataset
 	keep hhid xdurables_pc ccons_pc rcons_pc y y_0 _* imod food hhsize fcore nfcore oxfcons* oxnfcons*
