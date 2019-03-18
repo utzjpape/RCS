@@ -356,7 +356,7 @@ end
 
 capture: program drop RCS_prepare
 program define RCS_prepare
-	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) [ndiff(integer 3) shares(string)]
+	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) [training() ndiff(integer 3) shares(string)]
 	*prepare output directories
 	capture: mkdir "`dirbase'"
 	local lc_sdTemp = "`dirbase'/Temp"
