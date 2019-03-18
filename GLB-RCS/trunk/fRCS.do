@@ -9,6 +9,23 @@
 * RCS_collate: collates results from the simulation
 * RCS_analyze: analyzes the results
 
+*mata helper functions
+cap mata mata drop vselect_best()
+mata :
+void vselect_best(string scalar m,string scalar ret) 
+{
+    X = st_matrix(m)
+	k = .
+	x = .
+    for(i=1; i<=rows(X); i++){
+        x = min((x,X[i,2]))
+		if (x==X[i,2]) {
+			k = X[i,1]
+		}
+    }
+	st_local(ret,strofreal(k))
+}
+end
 
 *calculate standard error
 capture: program drop fse
@@ -147,7 +164,6 @@ program define RCS_partition
 	syntax varname, hhid(varname) itemid(varname) fweight(varname) hhsize(varname) nmodules(integer) ncore(integer) [ndiff(integer 3) shares(string)]
 	*prepare dataset
 	local xvalue = "`varlist'"
-	local ncore = `ncore'
 	local M = `nmodules'
 	local pc = "_pc"
 	*preserve dataset
@@ -294,10 +310,13 @@ program define RCS_partition
 	*aggregate
 	bysort `hhid': egen hhtot = sum(`xvalue')
 	gen hhshare = `xvalue' / hhtot
-	collapse (mean) hhshare (sum) `xvalue' [pweight=`fweight'], by(`itemid')
+	gen bcons = `xvalue'>0 & ~missing(`xvalue')
+	collapse (mean) hhshare (sum) `xvalue' pcons=bcons (count) n=bcons [pweight=`fweight'], by(`itemid')
+	replace pcons = pcons / n
 	egen xtot = sum(`xvalue')
 	gen totshare = `xvalue'/xtot
-	drop xtot
+	drop xtot n
+	label var pcons "Share of households consuming item"
 	label var hhshare "Average Household Consumption Share"
 	label var totshare "Consumption Share of Total Consumption"
 	if (inlist("`shares'","","demo","democratic")) {
@@ -345,6 +364,12 @@ program define RCS_prepare
 	local lc_sdOut = "`dirbase'/Out"
 	capture: mkdir "`lc_sdOut'"
 	
+	*check whether package is installed
+	capture : which vselect
+	if (_rc) {
+		display as result in smcl `"Please install package {it:vselect} from SSC in order to run this do-file;"' _newline `"you can do so by clicking this link: {stata "ssc install vselect":auto-install vselect}"'
+		exit 199
+	}
 	use "`using'", clear
 	*make hhid sequential
 	sort hhid
@@ -387,7 +412,7 @@ program define RCS_prepare
 	gen itemcode = foodid
 	order itemcode, before(foodid)
 	export excel using "`lc_sdOut'/FoodConsumption.xls", replace first(var) sheet("Items")
-	keep foodid itemmod itemred
+	keep foodid itemmod itemred pcons
 	save "`lc_sdTemp'/fsim_fpartition.dta", replace
 	*non-food partition
 	use "`lc_sdTemp'/HH-NonFood.dta", clear
@@ -396,8 +421,56 @@ program define RCS_prepare
 	order itemcode, before(nonfoodid)
 	*save assignment
 	export excel using "`lc_sdOut'/NonFoodConsumption.xls", replace first(var) sheet("Items")
-	keep nonfoodid itemmod itemred
+	keep nonfoodid itemmod itemred pcons
 	save "`lc_sdTemp'/fsim_nfpartition.dta", replace
+	
+	*CALCULATE NUMBER OF QUESTIONS AND TIME NEEDED
+	*merge food and non-food
+	use "`lc_sdTemp'/fsim_fpartition.dta", clear
+	quiet {
+		ren foodid nonfoodid
+		append using "`lc_sdTemp'/fsim_nfpartition.dta"
+		ren nonfoodid itemid
+		*calculate counts and number of yes-answers
+		egen pred = total(pcons) if itemred
+		egen nred = count(pcons) if itemred
+		egen nmod = max(itemmod)
+		collapse (sum) pcons (firstnm) pred nred nmod (count) ncons=itemid, by(itemmod)
+		reshape wide pcons ncons, i(pred nred) j(itemmod)
+		egen pq_ful = rowtotal(pcons*)
+		egen nq_ful = rowtotal(ncons*)
+		gen pq_cor = 0
+		gen nq_cor = 0
+		capture: confirm var pcons0
+		if (_rc!=111) {
+			replace pq_cor = pcons0
+			replace nq_cor = ncons0
+			drop pcons0 ncons0
+		}
+		egen pq_opt = rowmean(pcons*)
+		egen nq_opt = rowmean(ncons*)
+		gen pq_rcs = pq_cor + pq_opt
+		gen nq_rcs = nq_cor + nq_opt
+		ren (pred nred) (pq_red nq_red)
+		keep pq_* nq_* nmod
+		*get ratios for n and p
+		foreach x in n p {
+			if "`x'"=="n" local lx = ""
+			else local lx = " asked" 
+			foreach y in ful red rcs {
+				gen r`x'q_`y' = `x'q_`y' / `x'q_ful
+				label var r`x'q_`y' "Ratio of questions`lx' for `y'"
+				label var `x'q_`y' "Number of questions`lx' for `y'"
+			}
+			label var `x'q_cor "Numer of questions`lx' for core module"
+			label var `x'q_opt "Number of questions`lx' for optional module"
+		}
+		*prepare final dataset
+		order nq_* rnq_* pq_* rpq_*
+		order nmod *_ful *_red *_rcs *_cor *_opt
+		label var nmod "Number of modules"
+	}
+	save "`lc_sdTemp'/tstats.dta", replace
 end
 
 * descriptive statistics for the model, based on the full dataset
@@ -532,7 +605,7 @@ program define RCS_mask
 			quiet: bysort hhid: egen xfcons`kmod' = max(cxfood`kmod')
 			drop cxfood`kmod'
 		}
-		replace xfcons0 = 0 if missing(xfcons0)
+		quiet: replace xfcons0 = 0 if missing(xfcons0)
 		*make items columns and one record per hh
 		ren xfood xfitem
 		drop itemmod
@@ -632,7 +705,7 @@ end
 *will call RCS_estimate_`smethod' defined in fRCS_estimate_.do
 capture: program drop RCS_estimate
 program define RCS_estimate
-	syntax using/, dirbase(string) nmodules(integer) nsim(integer) nmi(integer) lmethod(namelist) model(string) rseed(integer)
+	syntax using/, dirbase(string) nmodules(integer) nsim(integer) nmi(integer) lmethod(namelist) rseed(integer)
 	*prepare output directories
 	local lc_sdTemp = "`dirbase'/Temp"
 	local lc_sdOut = "`dirbase'/Out"
@@ -640,16 +713,37 @@ program define RCS_estimate
 	local M = `nmodules'
 	local nI = `nmi'
 	set seed `rseed'
+	*get model, save specification in local macros model and logmodel
+	di "Obtaining model structure ..."
+	quiet {
+		*as model selection can take some time for many variables, we use first simulation only
+		*but model selection is robust against using different simulations
+		use "`lc_sdTemp'/mi_1.dta", clear
+		unab mcon : mcon_*
+		fvunab mcat : i.mcat_*
+		egen model = rowtotal(xfcons*_pc xnfcons*_pc xdurables_pc)
+		gen logmodel = log(model)
+		replace logmodel = log(.01) if missing(logmodel)
+		foreach m in model logmodel {
+			xi: vselect `m' i.strata hhsize urban `mcon' `mcat' [pweight=weight], best fix(i.hhmod i.pxdurables_pc)
+			matrix A = r(info)
+			matrix B = A[1...,colnumb("A","k")],A[1...,colnumb("A","AICC")]
+			mata vselect_best("B","k")
+			local `m' = r(best`k')
+			drop `m'
+		}
+	}
 	*start iteration over simulations
 	forvalues isim = 1 / `N' {
 		di "Entering simulation `isim':"
 		*ESTIMATE BASED ON DIFFERENT METHODS
 		foreach smethod of local lmethod {
-			di " ... for `smethod' ..."
+			di " ... running for `smethod' ..."
 			*change directory to make sure we are in a writable directory for some mi commands
 			quiet: cd "`lc_sdTemp'"
 			*load prepared dataset for mi
 			use "`lc_sdTemp'/mi_`isim'.dta", clear
+			xi i.strata `mcat' i.pxdurables_pc
 			*prepare variables
 			quiet: gen xcons_pc = .
 			quiet: gen xfcons_pc = .
@@ -665,7 +759,7 @@ program define RCS_estimate
 			}
 			*method selection
 			local mipre = ""
-			quiet: RCS_estimate_`smethod' , nmodules(`nmodules') nmi(`nmi') model("`model'")
+			quiet: RCS_estimate_`smethod' , nmodules(`nmodules') nmi(`nmi') model("`model'") logmodel("`logmodel'")
 			*check if mi dataset
 			quiet: mi query
 			if "`r(style)'"!="" local mipre = "mi passive:"
@@ -951,66 +1045,9 @@ program define RCS_analyze_pl
 		graph export "`lc_sdOut'/`sind'`sfsuff'.png", replace
 		graph drop `gl_`sind'' cmb_`sind'
 	}
-
-	*analyze FGT0 bias with range of poverty lines
-	di "Analyze FGT0 bias for each percentile..."
-	*write output file
-	capture: file close fh
-	file open fh using "`lc_sdOut'/simfgt0`sfsuff'.txt", replace write
-	file write fh "Method"
-	*add poverty lines to header
-	forvalues rx = 1/100 {
-		file write fh _tab "p`rx'"
-	}
-	file write fh _n
-	*obtain poverty lines
-	use "`lc_sdTemp'/simd_`: word 1 of `lmethod''_imp.dta", clear
-	quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
-	quiet: drop `sdrop'
-	_pctile ref if simulation==1 & imputation==1 [pweight=weight*hhsize], nq(100)
-	forvalues i = 1/100 {
-		local pline`i' = r(r`i')
-	}
-	quiet: replace hhid = hhid * 100 + imputation
-	drop imputation		
-	*calculate FGT0 for list of poverty lines for ref and red
-	foreach v of var ref red {
-		file write fh "`v'"
-		*iterate over poverty lines
-		forvalues i = 1/100 {
-			gen x = `v' < `pline`i'' if `v'<.
-			quiet: mean x [pw=weight*hhsize]
-			local z = _b[x]
-			file write fh _tab "`z'"
-			drop x
-		}
-		file write fh _n
-	}
-	*and now for remaining methods
-	foreach smethod of local lmethod {
-		di "... `smethod' ..."
-		file write fh "`smethod'"
-		use "`lc_sdTemp'/simd_`smethod'_imp.dta", clear
-		quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
-		quiet: drop `sdrop'
-		*iterate over poverty lines
-		forvalues i = 1/100 {
-			gen x = est < `pline`i'' if est<.
-			quiet: mean x [pw=weight*hhsize]
-			local z = _b[x]
-			file write fh _tab "`z'"
-			drop x
-		}
-		file write fh _n
-	}
-	file close fh
-	*show graph
-	import delimited "`lc_sdOut'/simfgt0`sfsuff'.txt", clear
-	reshape long p, i(method) j(x)
-	twoway (line p x, sort), by(method)
 end
 
-*analyzes dataset for all poverty lines	
+*analyzes dataset for all poverty lines	(and programmed more efficiently than the pl version)
 * parameters:
 *   dirbase: folder anchor for files
 *   lmethod: list of methods to analyze
@@ -1031,7 +1068,7 @@ program define RCS_analyze
 	else if (`urban'==1) {
 		local sfsuff = "-urban"
 	}	
-	*merge all datasets together
+	*prepare datasets also for ref and red
 	quiet {
 		use "`lc_sdTemp'/simd_`: word 1 of `lmethod''_imp.dta", clear
 		drop est
@@ -1040,13 +1077,15 @@ program define RCS_analyze
 		ren est ref
 		ren red est
 		save "`lc_sdTemp'/simd_red_imp.dta", replace
-		drop est
+		*save dataset for evaluating LLO method - though it's the same as reduced
+		save "`lc_sdTemp'/simd_llo_imp.dta", replace
+		ren est red
 		drop `sdrop'
 		merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
 		compress
 	}
-	local lrefredmeth = "ref red `lmethod'"
-	local lredmeth = "red `lmethod'"
+	local lredmeth = "red llo `lmethod'"
+	local lrefredmeth = "ref `lredmeth'"
 	*analyze FGTs performance with range of poverty lines
 	di "Analyze FGT0 bias for each percentile..."
 	*obtain poverty lines
@@ -1054,10 +1093,18 @@ program define RCS_analyze
 	forvalues i = 1/100 {
 		local pline`i' = r(r`i')
 	}
+	*obtain poverty lines for LLO 2011
+	_pctile red if simulation==1 & imputation==1 [pweight=weight*hhsize], nq(100)
+	forvalues i = 1/100 {
+		local pline_llo`i' = r(r`i')
+	}
 	*calculate FGTs and gini for list of poverty lines
 	di "  Calculating FGT and Gini: " _newline "  " _continue
 	foreach v of local lrefredmeth {
 		di "`v' " _continue
+		*allow different poverty lines
+		local pline = "pline"
+		if "`v'"=="llo" local pline = "pline_llo"
 		*prepare dataset
 		use "`lc_sdTemp'/simd_`v'_imp.dta", clear
 		quiet: drop `sdrop'
@@ -1073,8 +1120,8 @@ program define RCS_analyze
 		quiet: gen x_gini = (n + 1 - i) * est  if ~missing(est)
 		drop i n
 		quiet forvalues i = 1/100 {
-			gen x_fgt0_i`i' = est < `pline`i''  if ~missing(est)
-			gen x_fgt1_i`i' = max(`pline`i'' - est,0) / `pline`i'' if ~missing(est)
+			gen x_fgt0_i`i' = est < ``pline'`i''  if ~missing(est)
+			gen x_fgt1_i`i' = max(``pline'`i'' - est,0) / ``pline'`i'' if ~missing(est)
 			gen x_fgt2_i`i' = x_fgt1_i`i'^2 if ~missing(est)
 		}
 		collapse (mean) x_* est (count) n=hhid [pweight=weight*hhsize], by(simulation)
@@ -1124,6 +1171,7 @@ program define RCS_analyze
 	}
 	*assemble
 	use "`lc_sdTemp'/simd_red_pstats.dta", clear
+	append using "`lc_sdTemp'/simd_llo_pstats.dta"
 	quiet foreach sm of local lmethod {
 		append using "`lc_sdTemp'/simd_`sm'_pstats.dta"
 	}
@@ -1176,14 +1224,22 @@ program define RCS_analyze
 	graph bar (mean) p, over(method, label(angle(45) labsize(tiny))) over(indicator) by(metric, yrescale) ylabel(,angle(0)) name(g_metric)
 	graph export "`lc_sdOut'/metrics`sfsuff'.png", replace
 end
+
+capture: program drop RCS_analyze_time
+program define RCS_analyze_time
+	syntax , dirbase(string)
+	*prepare output directories
+	local lc_sdTemp = "`dirbase'/Temp"
+	local lc_sdOut = "`dirbase'/Out"
+end
 	
 capture: program drop RCS_run
 program define RCS_run
-	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) nsim(integer) nmi(integer) lmethod(namelist) model(string) [ndiff(integer 3) shares(string)] rseed(integer) [Prob(real 1.0)]
+	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) nsim(integer) nmi(integer) lmethod(namelist) [ndiff(integer 3) shares(string)] rseed(integer) [Prob(real 1.0)]
 	
 	RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') shares(`shares')
 	RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') prob(`prob')
-	RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model(`model') rseed(`rseed')
+	RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") rseed(`rseed')
 	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
 	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'")
 end

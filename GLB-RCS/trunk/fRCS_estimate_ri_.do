@@ -3,7 +3,7 @@
 *use mi to estimate missing consumption, all items at once
 capture: program drop RCS_estimate_ri_mi_seq
 program define RCS_estimate_ri_mi_seq
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -71,7 +71,7 @@ end
 *use mi to estimate missing consumption, all items at once
 capture: program drop RCS_estimate_ri_mi_par
 program define RCS_estimate_ri_mi_par
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -136,7 +136,7 @@ end
 *use the xxx to estimate missing consumption, all items at once
 capture: program drop RCS_estimate_ri_par
 program define RCS_estimate_ri_par
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -196,7 +196,7 @@ end
 *use the xxx to estimate missing consumption, item-by-item
 capture: program drop RCS_estimate_ri_seq
 program define RCS_estimate_ri_seq
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -277,7 +277,7 @@ end
 *use the xxx to estimate missing consumption
 capture: program drop RCS_estimate_ritem_mi
 program define RCS_estimate_ritem_mi
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -355,7 +355,7 @@ end
 *use the xxx to estimate missing consumption
 capture: program drop RCS_estimate_ritem_avg
 program define RCS_estimate_ritem_avg
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -411,7 +411,7 @@ end
 *use the xxx to estimate missing consumption
 capture: program drop RCS_estimate_ritem_med
 program define RCS_estimate_ritem_med
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -470,7 +470,7 @@ end
 *use the xxx to estimate missing consumption
 capture: program drop RCS_estimate_ritem_ols_lin_fe
 program define RCS_estimate_ritem_ols_lin_fe
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -526,7 +526,7 @@ end
 *use the xxx to estimate missing consumption
 capture: program drop RCS_estimate_ritem_parx_log
 program define RCS_estimate_ritem_parx_log
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
@@ -576,7 +576,7 @@ end
 *use the xxx to estimate missing consumption
 capture: program drop RCS_estimate_ritem_parx_lin
 program define RCS_estimate_ritem_parx_lin
-	syntax , nmodules(integer) nmi(integer) model(string)
+	syntax , nmodules(integer) nmi(integer) model(string) logmodel(string)
 	*prepare output directories
 	local M = `nmodules'
 	local nI = `nmi'
