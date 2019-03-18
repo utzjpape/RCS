@@ -11,7 +11,7 @@ program define RCS_estimate_mi_mvn
 	mi set wide
 	mi register imputed xfcons?_pc xnfcons?_pc
 	mi register regular oxfcons?_pc oxnfcons?_pc
-	mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc strata pchild psenior cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
+	mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc strata mcon* _I* cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
 	mi register passive xcons_pc xfcons_pc
 	mi impute mvn xfcons?_pc xnfcons?_pc = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', add(`nI') burnin(1000)
 end
@@ -27,7 +27,7 @@ program define RCS_estimate_mi_ce
 	mi set wide
 	mi register imputed xfcons?_pc xnfcons?_pc
 	mi register regular oxfcons?_pc oxnfcons?_pc
-	mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc strata pchild psenior cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
+	mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc strata mcon* _I* cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
 	mi register passive xcons_pc xfcons_pc
 	mi impute chained (regress) xfcons?_pc xnfcons?_pc = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model', add(`nI') report
 end
