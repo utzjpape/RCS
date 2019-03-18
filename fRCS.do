@@ -370,6 +370,11 @@ program define RCS_prepare
 		display as result in smcl `"Please install package {it:vselect} from SSC in order to run this do-file;"' _newline `"you can do so by clicking this link: {stata "ssc install vselect":auto-install vselect}"'
 		exit 199
 	}
+	capture : which esttab
+	if (_rc) {
+		display as result in smcl `"Please install package {it:st0085_2} for esttab from SSC in order to run this do-file;"' _newline `"you can do so by clicking this link: {stata "net install st0085_2.pkg":net install st0085_2.pkg, from(http://www.stata-journal.com/software/sj14-2/)}"'
+		exit 199
+	}
 	use "`using'", clear
 	*make hhid sequential
 	sort hhid
