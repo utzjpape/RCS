@@ -111,15 +111,16 @@ end
 *   dirbase: directory for output
 capture: program drop RCS_describe
 program define RCS_describe
-	syntax using/, dirbase(string)
-	*prepare output directories
-	capture: mkdir "`dirbase'"
+	syntax , dirbase(string)
+	*check preparations
 	local lc_sdTemp = "`dirbase'/Temp"
-	capture: mkdir "`lc_sdTemp'"
 	local lc_sdOut = "`dirbase'/Out"
-	capture: mkdir "`lc_sdOut'"
-
-	use "`using'", clear
+	capture: confirm file "`lc_sdTemp'/HHData.dta"
+	if (_rc==601) {
+		di as error "RCS_prepare must be run before any other RCS function can be executed."
+		error 601
+	}
+	use "`lc_sdTemp'/HHData.dta", clear
 	*histogram for administered items
 	egen xc = anycount(xfood*), values(0)
 	egen n_food = rownonmiss(xfood*)
@@ -159,15 +160,21 @@ end
 *local fweight= "weight"
 *local hhsize = "hhsize"
 *local ncore = `ncoref'
+*local train = ""
 capture: program drop RCS_partition
 program define RCS_partition
-	syntax varname, hhid(varname) itemid(varname) fweight(varname) hhsize(varname) nmodules(integer) ncore(integer) [ndiff(integer 3) shares(string)]
-	*prepare dataset
+	syntax varname, hhid(varname) itemid(varname) fweight(varname) hhsize(varname) nmodules(integer) ncore(integer) [train(varname) ndiff(integer 3) shares(string)]
+	*prepare macros
 	local xvalue = "`varlist'"
 	local M = `nmodules'
 	local pc = "_pc"
+	if ("`train'"=="") {
+		expand 2, gen(train)
+		local train = "train"
+	}
 	*preserve dataset
 	preserve
+	keep if train
 	*obtain share of household consumption (either democratic or plutocratic)
 	gen wx = `xvalue' * `fweight'
 	if (inlist("`shares'","","demo","democratic")) {
@@ -308,22 +315,27 @@ program define RCS_partition
 	*create assignment
 	restore
 	*aggregate
-	bysort `hhid': egen hhtot = sum(`xvalue')
+	bysort `train' `hhid': egen hhtot = sum(`xvalue')
 	gen hhshare = `xvalue' / hhtot
 	gen bcons = `xvalue'>0 & ~missing(`xvalue')
-	collapse (mean) hhshare (sum) `xvalue' pcons=bcons (count) n=bcons [pweight=`fweight'], by(`itemid')
+	collapse (mean) hhshare (sum) `xvalue' pcons=bcons (count) n=bcons [pweight=`fweight'], by(`train' `itemid')
 	replace pcons = pcons / n
-	egen xtot = sum(`xvalue')
+	bysort `train': egen xtot = sum(`xvalue')
 	gen totshare = `xvalue'/xtot
-	drop xtot n
+	drop xtot n `xvalue'
+	reshape wide hhshare pcons totshare, i(`itemid') j(`train')
+	ren (*0 *1) (* *_train)
 	label var pcons "Share of households consuming item"
 	label var hhshare "Average Household Consumption Share"
 	label var totshare "Consumption Share of Total Consumption"
+	label var pcons_train "Share of households consuming item in training set"
+	label var hhshare_train "Average Household Consumption Share in training set"
+	label var totshare_train "Consumption Share of Total Consumption in training set"
 	if (inlist("`shares'","","demo","democratic")) {
-		gsort -hhshare
+		gsort -hhshare_train
 	}
 	else if (inlist("`shares'","pluto","plutocratic")) {
-		gsort -totshare
+		gsort -totshare_train
 	}
 	else if (inlist("`shares'","rnd","rand","random")) {
 		gen xxr = runiform()
@@ -351,12 +363,14 @@ program define RCS_partition
 	foreach id of local r_nlevels {
 		quiet: replace itemred = 1 if `itemid' == `id'
 	}
+	label var itemmod "Module number for item"
+	label var itemred "In reduced item set"
 end
 
 
 capture: program drop RCS_prepare
 program define RCS_prepare
-	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) [training() ndiff(integer 3) shares(string)]
+	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) [train(string) ndiff(integer 3) shares(string)]
 	*prepare output directories
 	capture: mkdir "`dirbase'"
 	local lc_sdTemp = "`dirbase'/Temp"
@@ -382,9 +396,15 @@ program define RCS_prepare
 	drop hhid
 	ren hhidx hhid
 	order hhid, first
-	save "`using'", replace
+	save "`lc_sdTemp'/HHData-traintest.dta", replace
+	if ("`train'"!="") {
+		drop if `train'
+		drop `train'
+	}
+	save "`lc_sdTemp'/HHData.dta", replace
+	use "`lc_sdTemp'/HHData-traintest.dta", clear
 	*create food and non-food files
-	keep hhid hhsize weight xfood*
+	keep hhid hhsize weight xfood* `train'
 	*get labels
 	capture: label drop lfood
 	foreach v of varlist xfood* {
@@ -395,9 +415,14 @@ program define RCS_prepare
 	quiet: reshape long xfood, i(hhid hhsize weight) j(foodid)
 	*add labels and save
 	label values foodid lfood
+	save "`lc_sdTemp'/HH-Food_traintest.dta", replace
+	if ("`train'"!="") {
+		drop if `train'
+		drop `train'
+	}
 	save "`lc_sdTemp'/HH-Food.dta", replace
-	use "`using'", clear
-	keep hhid hhsize weight xnonfood*
+	use "`lc_sdTemp'/HHData-traintest.dta", clear
+	keep hhid hhsize weight xnonfood* `train'
 	*get labels
 	capture: label drop lnonfood
 	foreach v of varlist xnonfood* {
@@ -408,56 +433,68 @@ program define RCS_prepare
 	quiet: reshape long xnonfood, i(hhid hhsize weight) j(nonfoodid)
 	*add labels and save
 	label values nonfoodid lnonfood
+	save "`lc_sdTemp'/HH-NonFood_traintest.dta", replace
+	if ("`train'"!="") {
+		drop if `train'
+		drop `train'
+	}
 	save "`lc_sdTemp'/HH-NonFood.dta", replace
 	
 	*CREATE PARTITIONS
 	*food partition
-	use "`lc_sdTemp'/HH-Food.dta", clear
-	quiet: RCS_partition xfood, hhid("hhid") itemid("foodid") fweight("weight") hhsize("hhsize") nmodules(`nmodules') ncore(`ncoref') ndiff(`ndiff') shares(`shares')
+	use "`lc_sdTemp'/HH-Food_traintest.dta", clear
+	quiet: RCS_partition xfood, hhid("hhid") itemid("foodid") fweight("weight") hhsize("hhsize") nmodules(`nmodules') ncore(`ncoref') train("`train'") ndiff(`ndiff') shares(`shares')
 	gen itemcode = foodid
 	order itemcode, before(foodid)
 	export excel using "`lc_sdOut'/FoodConsumption.xls", replace first(var) sheet("Items")
-	keep foodid itemmod itemred pcons
+	keep foodid itemmod itemred pcons*
 	save "`lc_sdTemp'/fsim_fpartition.dta", replace
 	*non-food partition
-	use "`lc_sdTemp'/HH-NonFood.dta", clear
+	use "`lc_sdTemp'/HH-NonFood_traintest.dta", clear
 	quiet: RCS_partition xnonfood, hhid("hhid") itemid("nonfoodid") fweight("weight") hhsize("hhsize") nmodules(`nmodules') ncore(`ncorenf') ndiff(`ndiff') shares(`shares')
 	gen itemcode = nonfoodid
 	order itemcode, before(nonfoodid)
 	*save assignment
 	export excel using "`lc_sdOut'/NonFoodConsumption.xls", replace first(var) sheet("Items")
-	keep nonfoodid itemmod itemred pcons
+	keep nonfoodid itemmod itemred pcons*
 	save "`lc_sdTemp'/fsim_nfpartition.dta", replace
 	
 	*CALCULATE NUMBER OF QUESTIONS AND TIME NEEDED
 	*merge food and non-food
-	use "`lc_sdTemp'/fsim_fpartition.dta", clear
 	quiet {
+		use "`lc_sdTemp'/fsim_fpartition.dta", clear
 		ren foodid nonfoodid
 		append using "`lc_sdTemp'/fsim_nfpartition.dta"
 		ren nonfoodid itemid
 		*calculate counts and number of yes-answers
 		egen pred = total(pcons) if itemred
+		egen pred_train = total(pcons_train) if itemred
 		egen nred = count(pcons) if itemred
 		egen nmod = max(itemmod)
-		collapse (sum) pcons (firstnm) pred nred nmod (count) ncons=itemid, by(itemmod)
-		reshape wide pcons ncons, i(pred nred) j(itemmod)
-		egen pq_ful = rowtotal(pcons*)
+		collapse (sum) pcons pcons_train (firstnm) pred pred_train nred nmod (count) ncons=itemid, by(itemmod)
+		reshape wide pcons pcons_train ncons, i(pred pred_train nred) j(itemmod)
+		egen pq_ful = rowtotal(pcons?)
+		egen pqt_ful = rowtotal(pcons_train?)
 		egen nq_ful = rowtotal(ncons*)
 		gen pq_cor = 0
 		gen nq_cor = 0
-		capture: confirm var pcons0
+		gen pqt_cor = 0
+		gen nqt_cor = 0
+		capture: confirm var ncons0
 		if (_rc!=111) {
+			replace pqt_cor = pcons_train0
 			replace pq_cor = pcons0
 			replace nq_cor = ncons0
-			drop pcons0 ncons0
+			drop pcons_train0 pcons0 ncons0
 		}
-		egen pq_opt = rowmean(pcons*)
+		egen pq_opt = rowmean(pcons?)
+		egen pqt_opt = rowmean(pcons_train*)
 		egen nq_opt = rowmean(ncons*)
 		gen pq_rcs = pq_cor + pq_opt
+		gen pqt_rcs = pqt_cor + pqt_opt
 		gen nq_rcs = nq_cor + nq_opt
-		ren (pred nred) (pq_red nq_red)
-		keep pq_* nq_* nmod
+		ren (pred pred_train nred) (pq_red pqt_red nq_red)
+		keep pq_* pqt_* nq_* nmod
 		*get ratios for n and p
 		foreach x in n p {
 			if "`x'"=="n" local lx = ""
@@ -466,12 +503,19 @@ program define RCS_prepare
 				gen r`x'q_`y' = `x'q_`y' / `x'q_ful
 				label var r`x'q_`y' "Ratio of questions`lx' for `y'"
 				label var `x'q_`y' "Number of questions`lx' for `y'"
+				if ("`x'"=="p") {
+					gen r`x'qt_`y' = `x'qt_`y' / `x'qt_ful
+					label var r`x'qt_`y' "Ratio of training questions`lx' for `y'"
+					label var `x'qt_`y' "Number of training questions`lx' for `y'"
+				}
 			}
-			label var `x'q_cor "Numer of questions`lx' for core module"
+			label var `x'q_cor "Number of questions`lx' for core module"
 			label var `x'q_opt "Number of questions`lx' for optional module"
 		}
+		label var pqt_cor "Number of training questions`lx' for core module"
+		label var pqt_opt "Number of training questions`lx' for optional module"
 		*prepare final dataset
-		order nq_* rnq_* pq_* rpq_*
+		order nq_* rnq_* pqt_* rpqt_* pq_* rpq_*
 		order nmod *_ful *_red *_rcs *_cor *_opt
 		label var nmod "Number of modules"
 	}
@@ -482,16 +526,16 @@ end
 * make sure to run RCS_prepare first
 capture: program drop RCS_describe_model
 program define RCS_describe_model
-	syntax using/, dirbase(string) nmodules(integer) model(string)
-	*prepare output directories
-	capture: mkdir "`dirbase'"
+	syntax , dirbase(string) nmodules(integer) model(string)
+	*check preparations
 	local lc_sdTemp = "`dirbase'/Temp"
-	capture: mkdir "`lc_sdTemp'"
 	local lc_sdOut = "`dirbase'/Out"
-	capture: mkdir "`lc_sdOut'"
-	
-	*summarize at module level
-	use "`using'", clear
+	capture: confirm file "`lc_sdTemp'/HHData.dta"
+	if (_rc==601) {
+		di as error "RCS_prepare must be run before any other RCS function can be executed."
+		error 601
+	}
+	use "`lc_sdTemp'/HHData.dta", clear
 	keep hhid xnonfood* xfood*
 	ren xnonfood* xfoodX*
 	reshape long xfood, i(hhid) j(itemid) string
@@ -510,7 +554,7 @@ program define RCS_describe_model
 	ren (xfood0* xfood1*) (xnfcons* xfcons*)
 	save "`lc_sdTemp'/modcons.dta", replace
 	*test model
-	use "`using'", clear
+	use "`lc_sdTemp'/HHData.dta", clear
 	merge 1:1 hhid using "`lc_sdTemp'/modcons.dta", nogen keep(match) assert(match)
 	*get per capita variables
 	foreach v of varlist xfcons* xnfcons* {
@@ -546,17 +590,22 @@ end
 *         >1: maximum number of items to be administered in detail (instead of just y/n)
 capture: program drop RCS_mask
 program define RCS_mask
-	syntax using/, dirbase(string) nmodules(integer) nsim(integer) rseed(integer) [Prob(real 1.0)]
+	syntax , dirbase(string) nsim(integer) nmodules(integer) rseed(integer) [Prob(real 1.0)]
 	set seed `rseed'
 	local N = `nsim'
 	local M = `nmodules'
-	*prepare output directories
+	*check preparations
 	local lc_sdTemp = "`dirbase'/Temp"
 	local lc_sdOut = "`dirbase'/Out"
+	capture: confirm file "`lc_sdTemp'/HHData.dta"
+	if (_rc==601) {
+		di as error "RCS_prepare must be run before any other RCS function can be executed."
+		error 601
+	}
 	*start iteration over simulations
 	forvalues isim = 1 / `N' {
 		*get household assignment to modules
-		use "`using'", clear
+		use "`lc_sdTemp'/HHData.dta", clear
 		keep hhid cluster weight 
 		*start module assignment randomly per cluster to make sure they are uniformly across clusters
 		gen r = runiform()
@@ -685,7 +734,7 @@ program define RCS_mask
 		save "`lc_sdTemp'/hh-nonfood-consumption.dta", replace
 
 		*merge food and non-food
-		use "`using'", clear
+		use "`lc_sdTemp'/HHData.dta", clear
 		drop xfood* xnonfood*
 		quiet: merge 1:1 hhid using "`lc_sdTemp'/hh-food-consumption.dta", nogen assert(master match)
 		quiet: merge 1:1 hhid using "`lc_sdTemp'/hh-nonfood-consumption.dta", nogen assert(master match)
@@ -710,10 +759,15 @@ end
 *will call RCS_estimate_`smethod' defined in fRCS_estimate_.do
 capture: program drop RCS_estimate
 program define RCS_estimate
-	syntax using/, dirbase(string) nmodules(integer) nsim(integer) nmi(integer) lmethod(namelist) rseed(integer)
+	syntax , dirbase(string) nmodules(integer) nsim(integer) nmi(integer) lmethod(namelist) rseed(integer)
 	*prepare output directories
 	local lc_sdTemp = "`dirbase'/Temp"
 	local lc_sdOut = "`dirbase'/Out"
+	capture: confirm file "`lc_sdTemp'/HHData.dta"
+	if (_rc==601) {
+		di as error "RCS_prepare must be run before any other RCS function can be executed."
+		error 601
+	}
 	local N = `nsim'
 	local M = `nmodules'
 	local nI = `nmi'
@@ -796,10 +850,15 @@ end
 
 capture: program drop RCS_collate
 program define RCS_collate
-	syntax using/, dirbase(string) nsim(integer) nmi(integer) lmethod(namelist)
-	*prepare output directories
+	syntax , dirbase(string) nsim(integer) nmi(integer) lmethod(namelist)
+	*check preparations
 	local lc_sdTemp = "`dirbase'/Temp"
 	local lc_sdOut = "`dirbase'/Out"
+	capture: confirm file "`lc_sdTemp'/HHData.dta"
+	if (_rc==601) {
+		di as error "RCS_prepare must be run before any other RCS function can be executed."
+		error 601
+	}
 	local N = `nsim'
 	local nI = `nmi'
 
@@ -854,7 +913,7 @@ program define RCS_collate
 			quiet: save "`lc_sdTemp'/simd_`smethod'.dta", replace
 		}
 		*prepare analysis file
-		quiet: merge m:1 hhid using "`using'", nogen keep(match) keepusing(weight cluster urban)
+		quiet: merge m:1 hhid using "`lc_sdTemp'/HHData.dta", nogen keep(match) keepusing(weight cluster urban)
 		*get reference
 		quiet: gen x = est if simulation==0
 		quiet: bysort hhid: egen ref = max(x)
@@ -894,11 +953,15 @@ end
 *   urban: -1: no restriction, 0: rural only, 1: urban only
 capture: program drop RCS_analyze_pl
 program define RCS_analyze_pl
-	syntax using/, dirbase(string) lmethod(namelist) povline(real) [Urban(integer -1)]
-	*prepare output directories
+	syntax , dirbase(string) lmethod(namelist) povline(real) [Urban(integer -1)]
+	*check preparations
 	local lc_sdTemp = "`dirbase'/Temp"
 	local lc_sdOut = "`dirbase'/Out"
-	
+	capture: confirm file "`lc_sdTemp'/HHData.dta"
+	if (_rc==601) {
+		di as error "RCS_prepare must be run before any other RCS function can be executed."
+		error 601
+	}
 	*configure urban/rural filter
 	local sfsuff = ""
 	local sdrop = " if urban==1-`urban'" 
@@ -986,7 +1049,7 @@ program define RCS_analyze_pl
 	file write fh "red"
 	*prepare dataset
 	use "`lc_sdTemp'/simd_`: word 1 of `lmethod''_imp.dta", clear
-	quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+	quiet: merge m:1 hhid using "`lc_sdTemp'/HHData.dta", assert(using match) keep(match) keepusing(hhsize) nogen
 	quiet: drop `sdrop'
 	quiet: replace hhid = hhid * 100 + imputation
 	drop imputation
@@ -1017,7 +1080,7 @@ program define RCS_analyze_pl
 		file write fh "`smethod'"
 		*prepare dataset
 		use "`lc_sdTemp'/simd_`smethod'_imp.dta", clear
-		quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+		quiet: merge m:1 hhid using "`lc_sdTemp'/HHData.dta", assert(using match) keep(match) keepusing(hhsize) nogen
 		quiet: drop `sdrop'
 		quiet: replace hhid = hhid * 100 + imputation
 		drop imputation
@@ -1064,10 +1127,15 @@ end
 *   urban: -1: no restriction, 0: rural only, 1: urban only
 capture: program drop RCS_analyze
 program define RCS_analyze
-	syntax using/, dirbase(string) lmethod(namelist) [Urban(integer -1)]
-	*prepare output directories
+	syntax , dirbase(string) lmethod(namelist) [Urban(integer -1)]
+	*check preparations
 	local lc_sdTemp = "`dirbase'/Temp"
 	local lc_sdOut = "`dirbase'/Out"
+	capture: confirm file "`lc_sdTemp'/HHData.dta"
+	if (_rc==601) {
+		di as error "RCS_prepare must be run before any other RCS function can be executed."
+		error 601
+	}
 	
 	*configure urban/rural filter
 	local sfsuff = ""
@@ -1091,7 +1159,7 @@ program define RCS_analyze
 		save "`lc_sdTemp'/simd_llo_imp.dta", replace
 		ren est red
 		drop `sdrop'
-		merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+		merge m:1 hhid using "`lc_sdTemp'/HHData.dta", assert(using match) keep(match) keepusing(hhsize) nogen
 		compress
 	}
 	local lredmeth = "red llo `lmethod'"
@@ -1118,7 +1186,7 @@ program define RCS_analyze
 		*prepare dataset
 		use "`lc_sdTemp'/simd_`v'_imp.dta", clear
 		quiet: drop `sdrop'
-		quiet: merge m:1 hhid using "`using'", assert(using match) keep(match) keepusing(hhsize) nogen
+		quiet: merge m:1 hhid using "`lc_sdTemp'/HHData.dta", assert(using match) keep(match) keepusing(hhsize) nogen
 		quiet summ imputation
 		local b = 10^ceil(log10(r(max)))
 		quiet: replace hhid = hhid * `b' + imputation
@@ -1238,18 +1306,23 @@ end
 capture: program drop RCS_analyze_time
 program define RCS_analyze_time
 	syntax , dirbase(string)
-	*prepare output directories
+	*check preparations
 	local lc_sdTemp = "`dirbase'/Temp"
 	local lc_sdOut = "`dirbase'/Out"
+	capture: confirm file "`lc_sdTemp'/HHData.dta"
+	if (_rc==601) {
+		di as error "RCS_prepare must be run before any other RCS function can be executed."
+		error 601
+	}
 end
 	
 capture: program drop RCS_run
 program define RCS_run
-	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) nsim(integer) nmi(integer) lmethod(namelist) [ndiff(integer 3) shares(string)] rseed(integer) [Prob(real 1.0)]
+	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) nsim(integer) nmi(integer) lmethod(namelist) [train(varname) ndiff(integer 3) shares(string)] rseed(integer) [Prob(real 1.0)]
 	
-	RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') shares(`shares')
-	RCS_mask using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') prob(`prob')
-	RCS_estimate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") rseed(`rseed')
-	RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
-	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'")
+	RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') train(`train') ndiff(`ndiff') shares(`shares')
+	RCS_mask , dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') prob(`prob')
+	RCS_estimate , dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") rseed(`rseed')
+	RCS_collate , dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
+	RCS_analyze , dirbase("`dirbase'") lmethod("`lmethod'")
 end
