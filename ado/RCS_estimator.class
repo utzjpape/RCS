@@ -1,0 +1,303 @@
+*Class for Estimators for the Rapid Consumption Survey simulations
+version 14.2
+
+class RCS_estimator {
+	string lc_sdTemp
+	string lc_sdOut
+	double nmodules
+	double nmi
+	string model
+	string logmodel
+	string xi
+	double init = 0
+}
+program .prepare
+	syntax , dirbase(string) nmodules(integer) [force nmi(integer 1)]
+	*setup parameters
+	.lc_sdTemp = "`dirbase'/Temp"
+	.lc_sdOut = "`dirbase'/Out"
+	.nmodules = `nmodules'
+	.nmi = `nmi'
+	*variable xi expansion
+	unab mcon : mcon_*
+	fvunab mcat : i.mcat_*
+	.xi = "i.strata `mcat' i.pxdurables_pc"
+	capture confirm file "`.lc_sdTemp'/model.txt"
+	if ((_rc>0) | ("`force'"!="")) {
+		*get model, save specification in local macros model and logmodel
+		di "Obtaining model structure ..."
+		quiet {
+			*as model selection can take some time for many variables, we use first simulation only
+			*but model selection is robust against using different simulations
+			egen model = rowtotal(xfcons*_pc xnfcons*_pc xdurables_pc)
+			gen logmodel = log(model)
+			replace logmodel = log(.01) if missing(logmodel)
+			foreach m in model logmodel {
+				xi: vselect `m' i.strata hhsize urban `mcon' `mcat' [pweight=weight], best fix(i.hhmod i.pxdurables_pc)
+				matrix A = r(info)
+				matrix B = A[1...,colnumb("A","k")],A[1...,colnumb("A","AICC")]
+				vselect_best "B"
+				.`m' = r(best)
+				*output regression
+				eststo: quietly reg `m' ``m'' i.hhmod i.pxdurables_pc [pweight=weight]
+				drop `m'
+			}
+		}
+		esttab , r2 ar2 aic
+		esttab using "`.lc_sdOut'/Model.csv", r2 ar2 aic replace
+		eststo clear
+		*save models
+		capture file close fhm
+		file open fhm using "`.lc_sdTemp'/model.txt", replace write
+		file write fhm "`.model'" _n "`.logmodel'"
+		file close fhm
+	}
+	else {
+		*load saved models
+		capture file close fhm
+		file open fhm using "`.lc_sdTemp'/model.txt", read
+		file read fhm model 
+		file read fhm logmodel
+		file close fhm
+		.model = "`model'"
+		.logmodel = "`logmodel'"
+	}
+	.init=1
+end
+
+*******************************
+* single imputation functions *
+*******************************
+
+*use the average to estimate missing consumption
+program define .est_avg
+	syntax
+	if (`.init' < 1) {
+		di as error "RCS_estimator must be initialized using .prepare before running estimations."
+		error 1
+	}
+	*start estimation
+	quiet: forvalues imod = 1/`.nmodules' {
+		egen avg_xfcons`imod'_pc = mean(xfcons`imod'_pc)
+		replace xfcons`imod'_pc = avg_xfcons`imod'_pc if xfcons`imod'_pc>=.
+		egen avg_xnfcons`imod'_pc = mean(xnfcons`imod'_pc)
+		replace xnfcons`imod'_pc = avg_xnfcons`imod'_pc if xnfcons`imod'_pc>=.
+	}
+	drop avg_x*
+end
+
+*use the median to estimate missing consumption
+program define .est_med
+	syntax
+	if (`.init' < 1) {
+		di as error "RCS_estimator must be initialized using .prepare before running estimations."
+		error 1
+	}
+	*start estimation
+	quiet: forvalues imod = 1/`.nmodules' {
+		egen avg_xfcons`imod'_pc = median(xfcons`imod'_pc)
+		replace xfcons`imod'_pc = avg_xfcons`imod'_pc if xfcons`imod'_pc>=.
+		egen avg_xnfcons`imod'_pc = median(xnfcons`imod'_pc)
+		replace xnfcons`imod'_pc = avg_xnfcons`imod'_pc if xnfcons`imod'_pc>=.
+	}
+	drop avg_x*
+end
+
+*use the tobit to estimate missing consumption
+program define .est_tobit
+	syntax
+	if (`.init' < 1) {
+		di as error "RCS_estimator must be initialized using .prepare before running estimations."
+		error 1
+	}
+	*start estimation
+	quiet forvalues imod = 1/`.nmodules' {
+		*food
+		capture: tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `.model' i.cluster [aweight=weight], ll(0)
+		*if insufficient sample size, remove cluster variables
+		if (_rc == 2000) tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `.model' [aweight=weight], ll(0)
+		predict y`imod'_pc if xfcons`imod'_pc>=.
+		replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
+		drop y`imod'_pc
+		*non-food
+		capture: tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `.model' i.cluster [aweight=weight], ll(0)
+		if (_rc == 2000) tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `.model' [aweight=weight], ll(0)
+		predict y`imod'_pc if xnfcons`imod'_pc>=.
+		replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
+		drop y`imod'_pc
+	}
+end
+
+*use the regression to estimate missing consumption
+program define .est_reg
+	syntax
+	if (`.init' < 1) {
+		di as error "RCS_estimator must be initialized using .prepare before running estimations."
+		error 1
+	}
+	*start estimation
+	quiet: forvalues imod = 1/`.nmodules' {
+		*food
+		reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.model' i.cluster [aweight=weight]
+		predict y`imod'_pc if xfcons`imod'_pc>=.
+		replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
+		drop y`imod'_pc
+		*non-food
+		reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.model' i.cluster [aweight=weight]
+		predict y`imod'_pc if xnfcons`imod'_pc>=.
+		replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
+		drop y`imod'_pc
+	}
+end
+
+*********************************
+* multiple imputation functions *
+*********************************
+
+*use Multi-variate normal imputation using MCMC
+program define .est_mi_mvn
+	syntax
+	if (`.init' < 1) {
+		di as error "RCS_estimator must be initialized using .prepare before running estimations."
+		error 1
+	}
+	*run MI
+	mi set wide
+	mi register imputed xfcons?_pc xnfcons?_pc
+	mi register regular oxfcons?_pc oxnfcons?_pc
+	mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc strata mcon* _I* cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
+	mi register passive xcons_pc xfcons_pc
+	mi impute mvn xfcons?_pc xnfcons?_pc = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.model', add(`.nmi') burnin(1000)
+end
+
+*using chained equations
+program define .est_mi_ce
+	syntax
+	if (`.init' < 1) {
+		di as error "RCS_estimator must be initialized using .prepare before running estimations."
+		error 1
+	}
+	*run MI
+	mi set wide
+	mi register imputed xfcons?_pc xnfcons?_pc
+	mi register regular oxfcons?_pc oxnfcons?_pc
+	mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc strata mcon* _I* cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
+	mi register passive xcons_pc xfcons_pc
+	mi impute chained (regress) xfcons?_pc xnfcons?_pc = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.model', add(`.nmi') report
+end
+
+*log regressions with multiple imputations
+program define .est_mi_regl
+	syntax
+	if (`.init' < 1) {
+		di as error "RCS_estimator must be initialized using .prepare before running estimations."
+		error 1
+	}
+	.est_mi_reg , log
+end
+
+*truncated regressions with multiple imputations
+program define .est_mi_treg
+	syntax
+	if (`.init' < 1) {
+		di as error "RCS_estimator must be initialized using .prepare before running estimations."
+		error 1
+	}
+	.est_mi_reg , reg(truncated)
+end
+
+*truncated regressions with multiple imputations
+program define .est_mi_2ce
+	syntax
+	if (`.init' < 1) {
+		di as error "RCS_estimator must be initialized using .prepare before running estimations."
+		error 1
+	}
+	.est_mi_reg , reg(twostep)
+end
+
+*truncated regressions with multiple imputations
+program define .est_mi_2cel
+	syntax
+	if (`.init' < 1) {
+		di as error "RCS_estimator must be initialized using .prepare before running estimations."
+		error 1
+	}
+	.est_mi_reg , log reg(twostep)
+end
+
+*regression but with multiple imputations
+* parameters:
+*   regfunc: normal or truncated or twostep: 
+*      normal: standard regression
+*      truncated: use regression truncated at 0
+*      twostep: use a two-step MICE approach to predict consumption based on whether consumed
+program define .est_mi_reg
+	syntax , [log REGfunc(string)]
+	if (`.init' < 1) {
+		di as error "RCS_estimator must be initialized using .prepare before running estimations."
+		error 1
+	}
+	if ("`regfunc'"=="") local regfunc = "normal"
+	if !inlist("`regfunc'","normal","truncated","twostep") {
+		di as error "In RCS_estimate_mi_reg the parameter 'regfunc' must be 'normal', 'truncated' or 'twostep'."
+		error 1
+	}
+	if ("`regfunc'"=="truncated") & ("`log'"!="") {
+		di as error "In RCS_estimate_mi_reg, function cannot be called in truncated option with log switched on."
+		error 1
+	}
+	* reshape to long format
+	ren (xfcons0_pc xnfcons0_pc) (fcore nfcore)
+	ren (xfcons?_pc xnfcons?_pc) (y1? y0?)
+	qui reshape long y0 y1, i(hhid) j(imod)
+	qui reshape long y, i(hhid imod) j(food)
+	*remember 0 consumption
+	gen y_0 = y==0
+	if ("`log'"!="") {
+		*regularize for zero consumption
+		replace y = .01 if y<=0
+		replace y = log(y)
+	}
+	*get models degrees of freedom and make sure we have sufficient observation
+	*quiet: reg y i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model'
+	*local df = e(df_m)
+	*run MI
+	mi set wide
+	mi register imputed y y_0
+	mi register regular imod food
+	mi register regular hh* cluster strata mcon* _I* cfcons_pc cnfcons_pc pxfcons0_pc pxnfcons0_pc pxdurables_pc
+	*run ols or truncated regression
+	if ("`regfunc'"=="normal") {
+		mi impute regress y = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.`log'model', add(`.nmi') by(imod food)
+	}
+	else if ("`regfunc'"=="truncated") {
+		*replace zeros as they cannot be considered in the regression (can't be called as log)
+		summ y if y>0
+		replace y = r(min) if y==0
+		mi impute truncreg y = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.model', ll(0) add(`.nmi') by(imod food) force
+		mi xeq: replace y = 0 if missing(y) | y_0
+	}
+	else if ("`regfunc'"=="twostep") {
+		mi impute chained (logit) y_0 (reg, cond(if y_0==0)) y = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.`log'model', add(`.nmi') by(imod food)
+	}
+	*transform into household-level dataset
+	keep hhid xdurables_pc ccons_pc rcons_pc y y_0 _* imod food hhsize fcore nfcore oxfcons* oxnfcons*
+	if ("`log'"!="") {
+		mi xeq: replace y = exp(y)
+	}
+	*reshape back to the hh-level
+	mi xeq: replace y = 0 if y_0
+	drop y_0
+	mi reshape wide y, i(hhid imod) j(food)
+	mi rename y0 xnfcons
+	mi rename y1 xfcons
+	mi reshape wide xfcons xnfcons, i(hhid) j(imod)
+	foreach v of var xfcons* xnfcons* {
+		mi ren `v' `v'_pc
+	}
+	mi ren fcore xfcons0_pc
+	mi ren nfcore xnfcons0_pc
+	gen xcons_pc = .
+	mi register passive xcons_pc
+end

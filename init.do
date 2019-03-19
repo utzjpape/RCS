@@ -60,6 +60,8 @@ global gsdDo = "`swdLocal'/Do"
 global gsdTemp = "`swdLocal'/Temp"
 global gsdOutput = "`swdLocal'/Output"
 global gsdDataBox = "`swdBox'"
+*add ado path
+adopath + "${gsdDo}/ado"
 
 **If needed, install the directories and packages used in the process 
 capture confirm file "`swdLocal'/Data/nul"
@@ -74,7 +76,6 @@ di check
 if check==0 {
 		display "No action needed"
 }
-
 else {
 	mkdir "${gsdData}"
 	mkdir "${gsdTemp}"
