@@ -39,7 +39,7 @@ program .prepare
 				vselect_best "B"
 				.`m' = r(best)
 				*output regression
-				eststo: quietly reg `m' ``m'' i.hhmod i.pxdurables_pc [pweight=weight]
+				eststo: quietly reg `m' `.`m'' i.hhmod i.pxdurables_pc [pweight=weight]
 				drop `m'
 			}
 		}

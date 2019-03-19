@@ -60,9 +60,10 @@ program define .fse, rclass
 	return scalar cv = `xsd' / r(mean)
 end
 program .prepare
-	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) [force train(string) ndiff(integer 3) shares(string) rseed(integer -1)]
+	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) [force erase train(string) ndiff(integer 3) shares(string) rseed(integer -1)]
 	*prepare output directories
 	.dirbase = "`dirbase'"
+	if ("`erase"!="") shell rmdir "`.dirbase'" /s
 	capture: mkdir "`.dirbase'"
 	.lc_sdTemp = "`dirbase'/Temp"
 	capture: mkdir "`.lc_sdTemp'"
@@ -1058,8 +1059,8 @@ program define .analyze
 end
 
 program define .run
-	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) nsim(integer) nmi(integer) lmethod(namelist) [force train(varname) ndiff(integer 3) shares(string) rseed(integer 230880) Prob(real 1.0)]
-	.prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') train(`train') ndiff(`ndiff') shares("`shares'") rseed(`rseed') `force'
+	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) nsim(integer) nmi(integer) lmethod(namelist) [force erase train(varname) ndiff(integer 3) shares(string) rseed(integer 230880) Prob(real 1.0)]
+	.prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') train(`train') ndiff(`ndiff') shares("`shares'") rseed(`rseed') `force' `erase'
 	.mask , nsim(`nsim') prob(`prob') `force'
 	.estimate , lmethod("`lmethod'") nmi(`nmi') `force'
 	.collate , `force'

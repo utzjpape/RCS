@@ -35,6 +35,8 @@ foreach k of local lk {
 	local ncoref = `k'
 	local ncorenf = `k'
 	local dirbase = "${gsdOutput}/KEN-c`k'-m`nmodules'"
+	*just for local execution
+	local lc_sdTemp = "`dirbase'/Temp"
 	
 	*create instance to run RCS simulations
 	capture classutil drop .r
