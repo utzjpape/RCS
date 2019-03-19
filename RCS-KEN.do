@@ -18,37 +18,31 @@ if _rc != 0 {
 *number of modules
 local nmodules = 9
 *number of simulations (should be 20)
-local nsim = 1
+local nsim = 10
 *number of imputations (should be 50)
 local nmi = 50
 *number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
 local ndiff = 3
 *methods
-local lmethod = "med avg reg tobit mi_ce mi_treg mi_reg mi_regl mi_2ce mi_2cel"
-
-*other parameters
-local shares = "demo"
-local povline = `xpovline'
-local rseed = 23081980
-
-*read library
-quiet: include "${gsdDo}/fRCS.do"
-quiet: include "${gsdDo}/fRCS_estimate_.do"
-quiet: include "${gsdDo}/fRCS_estimate_mi_.do"
+local lmethod = "med avg reg tobit mi_ce mi_reg mi_regl mi_2ce mi_2cel"
 
 local lk = "1 5 10 20 50"
 local lk = "1 50"
-local lk = "0"
+local lk = "0 50"
 
 *run over different p
 foreach k of local lk {
 	local ncoref = `k'
 	local ncorenf = `k'
 	local dirbase = "${gsdOutput}/KEN-c`k'-m`nmodules'"
-	*RCS_run using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`k') ndiff(`k') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") shares(`shares') rseed(`rseed')
-	RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") 
+	
+	*create instance to run RCS simulations
+	capture classutil drop .r
+	.r = .RCS.new
+	*.r.test
+	.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') force
+	.r.mask , nsim(`nsim') force
+	.r.estimate , lmethod("`lmethod'") nmi(`nmi') force
+	.r.collate , force
+	.r.analyze , force
 }
-
-*how to continue:
-*  just use a core module with all items, and then do out-of-sample prediction and check accuracy depending on sample size
-*  also try for very small cores (to see whether problem with the 0s)
