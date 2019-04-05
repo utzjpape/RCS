@@ -42,9 +42,9 @@ foreach k of local lk {
 	capture classutil drop .r
 	.r = .RCS.new
 	*.r.test
-	.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') force
-	.r.mask , nsim(`nsim') force
-	.r.estimate , lmethod("`lmethod'") nmi(`nmi') force
-	.r.collate , force
-	.r.analyze , force
+	.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
+	.r.mask , nsim(`nsim')
+	.r.estimate , lmethod("`lmethod'") nmi(`nmi')
+	.r.collate
+	.r.analyze
 }

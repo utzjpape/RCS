@@ -775,6 +775,7 @@ program define .estimate
 				}
 				quiet: compress
 				save "`.lc_sdTemp'/sim_`smethod'_`isim'.dta", replace
+				capture: erase save "`.lc_sdTemp'/simd_`smethod'.dta", replace
 			}
 			*add to lmethod
 			if !strpos("`.lmethod'","`smethod'") .lmethod = "`.lmethod' `smethod'"
@@ -872,6 +873,8 @@ program define .collate
 			quiet: drop if imputation>1
 			drop imputation
 			save "`.lc_sdTemp'/simd_`smethod'.dta", replace
+			capture: erase "`.lc_sdTemp'/simd_`smethod'_stats.dta", replace
+
 		}
 	}
 	.status = 4
@@ -959,7 +962,7 @@ program define .analyze
 			quiet: replace x_gini = (n+1-2*x_gini / est) / n
 			drop est n
 			save "`.lc_sdTemp'/simd_`v'_stats.dta", replace
-			erase "`.lc_sdTemp'/simd_`v'_pstats.dta"
+			capture: erase "`.lc_sdTemp'/simd_`v'_pstats.dta"
 		}
 	}
 	*get performance statistics
@@ -1007,7 +1010,8 @@ program define .analyze
 	*assemble
 	use "`.lc_sdTemp'/simd_red_pstats.dta", clear
 	append using "`.lc_sdTemp'/simd_llo_pstats.dta"
-	quiet foreach sm of local .lmethod {
+	local lmethod = "`.lmethod'"
+	quiet foreach sm of local lmethod {
 		append using "`.lc_sdTemp'/simd_`sm'_pstats.dta"
 	}
 	save "`.lc_sdTemp'/simd_pstats.dta", replace
@@ -1060,6 +1064,7 @@ program define .analyze
 	capture: graph drop g_metric
 	graph bar (mean) p, over(method, label(angle(45) labsize(tiny))) over(indicator) by(metric, yrescale) ylabel(,angle(0)) name(g_metric)
 	graph export "`.lc_sdOut'/metrics`sfsuff'.png", replace
+	table method indicator metric, c(mean p) format(%9.2f)
 end
 
 program define .run
