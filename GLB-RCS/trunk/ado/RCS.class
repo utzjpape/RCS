@@ -436,7 +436,7 @@ end
 program define .describe
 	*check preparations
 	if .status == 0 {
-		di as error "RCS.descibe: please first run RCS.prepare."
+		di as error "RCS.describe: please first run RCS.prepare."
 		error 1
 	}
 	use "`.lc_sdTemp'/HHData.dta", clear
@@ -475,7 +475,7 @@ program define .describe_model
 	syntax , model(string)
 	*check preparations
 	if .status == 0 {
-		di as error "RCS.descibe: please first run RCS.prepare."
+		di as error "RCS.describe_model: please first run RCS.prepare."
 		error 1
 	}
 	use "`.lc_sdTemp'/HHData.dta", clear
@@ -535,7 +535,7 @@ program define .mask
 	syntax , nsim(integer) [force Prob(real 1.0)]
 	*check preparations
 	if `.status' < 1 {
-		di as error "RCS.descibe: please first run RCS.prepare."
+		di as error "RCS.mask: please first run RCS.prepare."
 		error 1
 	}
 	set seed `.rseed'
@@ -704,7 +704,7 @@ program define .estimate
 	syntax , lmethod(namelist) [force nmi(integer 1)]
 	*check preparations
 	if `.status' < 2 {
-		di as error "RCS.descibe: please first run RCS.prepare followed by RCS.mask."
+		di as error "RCS.estimate: please first run RCS.prepare followed by RCS.mask."
 		error 1
 	}
 	set seed `.rseed'
@@ -787,7 +787,7 @@ program define .collate
 	syntax , [force]
 	*check preparations
 	if `.status' < 3 {
-		di as error "RCS.descibe: please first run RCS.prepare followed by RCS.mask and RCS.estimate."
+		di as error "RCS.collate: please first run RCS.prepare followed by RCS.mask and RCS.estimate."
 		error 1
 	}
 
@@ -883,7 +883,7 @@ program define .analyze
 	syntax , [force Urban(integer -1)]
 	*check preparations
 	if `.status' < 4 {
-		di as error "RCS.descibe: please first run RCS.prepare followed by RCS.mask, RCS.estimate and RCS.collate."
+		di as error "RCS.analyze: please first run RCS.prepare followed by RCS.mask, RCS.estimate and RCS.collate."
 		error 1
 	}
 	
@@ -896,42 +896,42 @@ program define .analyze
 	else if (`urban'==1) {
 		local sfsuff = "-urban"
 	}	
-	capture: confirm file "`.lc_sdOut'/metrics`sfsuff'.png"
-	if ((_rc>0) | ("`force'"!="")) {
-		*prepare datasets also for ref and red
-		quiet {
-			use "`.lc_sdTemp'/simd_`: word 1 of `.lmethod''_imp.dta", clear
-			drop est
-			ren ref est
-			save "`.lc_sdTemp'/simd_ref_imp.dta", replace
-			ren est ref
-			ren red est
-			save "`.lc_sdTemp'/simd_red_imp.dta", replace
-			*save dataset for evaluating LLO method - though it's the same as reduced
-			save "`.lc_sdTemp'/simd_llo_imp.dta", replace
-			ren est red
-			drop `sdrop'
-			merge m:1 hhid using "`.lc_sdTemp'/HHData.dta", assert(using match) keep(match) keepusing(hhsize) nogen
-			compress
-		}
-		local lredmeth = "red llo `.lmethod'"
-		local lrefredmeth = "ref `lredmeth'"
-		*analyze FGTs performance with range of poverty lines
-		di "Analyze FGT0 bias for each percentile..."
-		*obtain poverty lines
-		_pctile ref if simulation==1 & imputation==1 [pweight=weight*hhsize], nq(100)
-		forvalues i = 1/100 {
-			local pline`i' = r(r`i')
-		}
-		*obtain poverty lines for LLO 2011
-		_pctile red if simulation==1 & imputation==1 [pweight=weight*hhsize], nq(100)
-		forvalues i = 1/100 {
-			local pline_llo`i' = r(r`i')
-		}
-		*calculate FGTs and gini for list of poverty lines
-		di "  Calculating FGT and Gini: " _newline "  " _continue
-		foreach v of local lrefredmeth {
-			di "`v' " _continue
+	*prepare datasets also for ref and red
+	quiet {
+		use "`.lc_sdTemp'/simd_`: word 1 of `.lmethod''_imp.dta", clear
+		drop est
+		ren ref est
+		save "`.lc_sdTemp'/simd_ref_imp.dta", replace
+		ren est ref
+		ren red est
+		save "`.lc_sdTemp'/simd_red_imp.dta", replace
+		*save dataset for evaluating LLO method - though it's the same as reduced
+		save "`.lc_sdTemp'/simd_llo_imp.dta", replace
+		ren est red
+		drop `sdrop'
+		merge m:1 hhid using "`.lc_sdTemp'/HHData.dta", assert(using match) keep(match) keepusing(hhsize) nogen
+		compress
+	}
+	local lredmeth = "red llo `.lmethod'"
+	local lrefredmeth = "ref `lredmeth'"
+	*analyze FGTs performance with range of poverty lines
+	di "Analyze FGT0 bias for each percentile..."
+	*obtain poverty lines
+	_pctile ref if simulation==1 & imputation==1 [pweight=weight*hhsize], nq(100)
+	forvalues i = 1/100 {
+		local pline`i' = r(r`i')
+	}
+	*obtain poverty lines for LLO 2011
+	_pctile red if simulation==1 & imputation==1 [pweight=weight*hhsize], nq(100)
+	forvalues i = 1/100 {
+		local pline_llo`i' = r(r`i')
+	}
+	*calculate FGTs and gini for list of poverty lines
+	di "  Calculating FGT and Gini: " _newline "  " _continue
+	foreach v of local lrefredmeth {
+		di "`v' " _continue
+		capture: confirm file "`.lc_sdTemp'/simd_`v'_stats.dta"
+		if ((_rc>0) | ("`force'"!="")) {
 			*allow different poverty lines
 			local pline = "pline"
 			if "`v'"=="llo" local pline = "pline_llo"
@@ -959,10 +959,14 @@ program define .analyze
 			quiet: replace x_gini = (n+1-2*x_gini / est) / n
 			drop est n
 			save "`.lc_sdTemp'/simd_`v'_stats.dta", replace
+			erase "`.lc_sdTemp'/simd_`v'_pstats.dta"
 		}
-		*get performance statistics
-		di "  Calculating performance indicators..."
-		quiet quiet foreach sm of local lredmeth {
+	}
+	*get performance statistics
+	di "  Calculating performance indicators..."
+	quiet quiet foreach sm of local lredmeth {
+		capture: confirm file "`.lc_sdTemp'/simd_`sm'_pstats.dta"
+		if ((_rc>0) | ("`force'"!="")) {
 			use "`.lc_sdTemp'/simd_ref_stats.dta", clear
 			ren x_* r_*
 			merge 1:1 simulation using "`.lc_sdTemp'/simd_`sm'_stats.dta", assert(match) keep(match) nogen		
@@ -999,63 +1003,63 @@ program define .analyze
 			order method, after(i)
 			save "`.lc_sdTemp'/simd_`sm'_pstats.dta", replace
 		}
-		*assemble
-		use "`.lc_sdTemp'/simd_red_pstats.dta", clear
-		append using "`.lc_sdTemp'/simd_llo_pstats.dta"
-		quiet foreach sm of local lmethod {
-			append using "`.lc_sdTemp'/simd_`sm'_pstats.dta"
-		}
-		save "`.lc_sdTemp'/simd_pstats.dta", replace
-		*output table for differences with reference
-		quiet {
-			gen d = x - r
-			gen dabs = abs(d)
-			collapse (mean) d dabs p_*, by(method indicator i)
-			*produce graph
-			encode method, gen(imethod)
-			encode indicator, gen(iindicator)
-			gen int id = imethod * 1000 + iindicator
-			levelsof id, local(lid)
-			foreach id of local lid {
-				local j = floor(`id'/1000)
-				label define id `id' "`:label imethod `j''", modify
-			}
-			label values id id
-			label var d "deviation"
-			tsset id i
-			local gcmb = ""
-			local legend = ""
-		}
-		foreach ind in fgt0 fgt1 fgt2 gini {
-			xtline d if indicator=="`ind'", overlay name(g`ind') ylabel(,angle(0)) title("`ind'") `legend'
-			local legend = "legend(off)"
-			local gcmb = "`gcmb' g`ind'"
-		}
-		capture which grc1leg2
-		if _rc==111 {
-			graph combine `gcmb'
-		}
-		else {
-			grc1leg2 `gcmb'
-		}
-		graph export "`.lc_sdOut'/fgt`sfsuff'.png", replace	
-		graph drop `gcmb'
-		capture: graph drop g_dabs
-		graph bar (mean) dabs, over(method, label(angle(45))) over(indicator) title("Average Absolute Deviation") ylabel(,angle(0)) ytitle("") name(g_dabs)
-		graph export "`.lc_sdOut'/fgt-avg`sfsuff'.png", replace
-		export excel "`.lc_sdOut'/fgt`sfsuff'.xls", replace sheet("Percentiles") firstrow(var)
-		collapse (mean) d dabs p_*, by(method indicator)
-		export excel "`.lc_sdOut'/fgt`sfsuff'.xls", sheetreplace sheet("Averages") firstrow(var)
-		*output average performance statistics
-		use "`.lc_sdTemp'/simd_pstats.dta", clear
-		drop r x
-		quiet: reshape long p_, i(simulation i indicator method) j(metric) string
-		ren p_ p
-		collapse (mean) p, by(i method indicator metric)
-		capture: graph drop g_metric
-		graph bar (mean) p, over(method, label(angle(45) labsize(tiny))) over(indicator) by(metric, yrescale) ylabel(,angle(0)) name(g_metric)
-		graph export "`.lc_sdOut'/metrics`sfsuff'.png", replace
 	}
+	*assemble
+	use "`.lc_sdTemp'/simd_red_pstats.dta", clear
+	append using "`.lc_sdTemp'/simd_llo_pstats.dta"
+	quiet foreach sm of local .lmethod {
+		append using "`.lc_sdTemp'/simd_`sm'_pstats.dta"
+	}
+	save "`.lc_sdTemp'/simd_pstats.dta", replace
+	*output table for differences with reference
+	quiet {
+		gen d = x - r
+		gen dabs = abs(d)
+		collapse (mean) d dabs p_*, by(method indicator i)
+		*produce graph
+		encode method, gen(imethod)
+		encode indicator, gen(iindicator)
+		gen int id = imethod * 1000 + iindicator
+		levelsof id, local(lid)
+		foreach id of local lid {
+			local j = floor(`id'/1000)
+			label define id `id' "`:label imethod `j''", modify
+		}
+		label values id id
+		label var d "deviation"
+		tsset id i
+		local gcmb = ""
+		local legend = ""
+	}
+	foreach ind in fgt0 fgt1 fgt2 gini {
+		xtline d if indicator=="`ind'", overlay name(g`ind') ylabel(,angle(0)) title("`ind'") `legend'
+		local legend = "legend(off)"
+		local gcmb = "`gcmb' g`ind'"
+	}
+	capture which grc1leg2
+	if _rc==111 {
+		graph combine `gcmb'
+	}
+	else {
+		grc1leg2 `gcmb'
+	}
+	graph export "`.lc_sdOut'/fgt`sfsuff'.png", replace	
+	graph drop `gcmb'
+	capture: graph drop g_dabs
+	graph bar (mean) dabs, over(method, label(angle(45))) over(indicator) title("Average Absolute Deviation") ylabel(,angle(0)) ytitle("") name(g_dabs)
+	graph export "`.lc_sdOut'/fgt-avg`sfsuff'.png", replace
+	export excel "`.lc_sdOut'/fgt`sfsuff'.xls", replace sheet("Percentiles") firstrow(var)
+	collapse (mean) d dabs p_*, by(method indicator)
+	export excel "`.lc_sdOut'/fgt`sfsuff'.xls", sheetreplace sheet("Averages") firstrow(var)
+	*output average performance statistics
+	use "`.lc_sdTemp'/simd_pstats.dta", clear
+	drop r x
+	quiet: reshape long p_, i(simulation i indicator method) j(metric) string
+	ren p_ p
+	collapse (mean) p, by(i method indicator metric)
+	capture: graph drop g_metric
+	graph bar (mean) p, over(method, label(angle(45) labsize(tiny))) over(indicator) by(metric, yrescale) ylabel(,angle(0)) name(g_metric)
+	graph export "`.lc_sdOut'/metrics`sfsuff'.png", replace
 end
 
 program define .run
