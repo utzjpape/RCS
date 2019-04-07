@@ -32,7 +32,7 @@ end
 *********************************************************************************
 capture: use "`sfdata'", clear
 if _rc == 601 {
-	quiet: do "${gsdDo}/Create-ExKenya.do"
+	quiet: do "${gsdDo}/Create-ExKenya.do" 10 4
 }
 *create per capita variables
 foreach v of var ccons xfcons* xnfcons* xdurables {
@@ -104,7 +104,7 @@ forvalues food = 0/1 {
 			mi impute monotone (logit, augment) y_0 (reg, cond(if y_0==0)) y = `model' if imod==`imod' & food==`food', `add'
 		}
 		else {
-			mi impute reg y = `.model' if imod==`imod' & food==`food', `add'
+			mi impute reg y = `model' if imod==`imod' & food==`food', `add'
 		}
 		local add = "replace"
 	}

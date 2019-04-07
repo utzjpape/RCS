@@ -1,10 +1,4 @@
 *prepares example dataset
-
-clear all
-ma drop all
-set more off
-
-*prepare Kenyan dataset
 local using= "${gsdData}/KEN-HHDatared.dta"
 capture confirm file "`using'"
 if _rc != 0 {
@@ -12,14 +6,16 @@ if _rc != 0 {
 }
 
 *create input dataset for simulation
-local nm = 4
+local core = `1'
+local nm = `2'
+local sbase = "${gsdOutput}/KEN-Example_c`core'-m`nm'"
 capture classutil drop .r
 .r = .RCS.new
-.r.prepare using "`using`red''", dirbase("${gsdOutput}/KEN-Example") nmodules(`nm') ncoref(10) ncorenf(10) ndiff(3)
+.r.prepare using "`using'", dirbase("`sbase'") nmodules(`nm') ncoref(`core') ncorenf(`core') ndiff(3)
 .r.mask , nsim(1)
 
 *remove variables not needed and label
-use "${gsdOutput}/KEN-Example/Temp/mi_1.dta", clear
+use "`sbase'/Temp/mi_1.dta", clear
 gen ccons = cfcons + cnfcons + xdurables
 drop id_hh rfcons rnfcons cfcons cnfcons xfitem* xnfitem* bfitem* bnfitem* *_pc
 order hhid strata urban cluster weight hhmod hhsize ccons xfcons* xnfcons* xdurables mcat* mcon*
@@ -30,4 +26,4 @@ forvalues i = 0/`nm' {
 	label var xfcons`i' "Food consumption in module `i'"
 	label var xnfcons`i' "Non-food consumption in module `i'"
 }
-save "${gsdOutput}/KEN-Example.dta", replace
+save "${gsdOutput}/KEN-Example_c`core'-m`nm'.dta", replace
