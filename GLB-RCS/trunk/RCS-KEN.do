@@ -35,14 +35,12 @@ foreach k of local lk {
 	local ncoref = `k'
 	local ncorenf = `k'
 	local dirbase = "${gsdOutput}/KEN`red'-c`k'-m`nmodules'"
-	*just for local execution
-	local lc_sdTemp = "`dirbase'/Temp"
 	
 	*create instance to run RCS simulations
 	capture classutil drop .r
 	.r = .RCS.new
 	*.r.test
-	.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(3) erase
+	.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(3)
 	.r.mask , nsim(`nsim')
 	.r.estimate , lmethod("`lmethod'") nmi(`nmi')
 	.r.collate
