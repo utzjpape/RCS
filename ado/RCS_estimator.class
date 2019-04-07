@@ -264,7 +264,7 @@ program define .est_mi_reg
 	qui reshape long y0 y1, i(hhid) j(imod)
 	qui reshape long y, i(hhid imod) j(food)
 	*remember 0 consumption
-	gen y_0 = y==0
+	gen y_0 = y==0 if !missing(y)
 	if ("`log'"!="") {
 		*regularize for zero consumption
 		replace y = .01 if y<=0
@@ -290,7 +290,11 @@ program define .est_mi_reg
 		mi xeq: replace y = 0 if missing(y) | y_0
 	}
 	else if ("`regfunc'"=="twostep") {
-		mi impute chained (logit) y_0 (reg, cond(if y_0==0)) y = `.`log'model', add(`.nmi') by(imod food)
+		*step conditional step if almost all hh have module consumption >0
+		bysort food imod: egen ny_0 = mean(y_0)
+		replace y_0 = 0 if ny_0 < 0.01
+		drop ny_0
+		mi impute chained (logit, augment) y_0 (reg, cond(if y_0==0)) y = `.`log'model', add(`.nmi') by(imod food)
 	}
 	*transform into household-level dataset
 	keep hhid xdurables_pc ccons_pc rcons_pc y y_0 _* imod food hhsize fcore nfcore oxfcons* oxnfcons*
@@ -298,7 +302,7 @@ program define .est_mi_reg
 		mi xeq: replace y = exp(y)
 	}
 	*reshape back to the hh-level
-	mi xeq: replace y = 0 if y_0
+	mi xeq: replace y = 0 if y_0==1
 	drop y_0
 	mi reshape wide y, i(hhid imod) j(food)
 	mi rename y0 xnfcons
