@@ -83,3 +83,54 @@ else {
 	
 	*install packages used in the process
 }
+
+*define functions needed
+
+*prepare items in wide format, adding zeros for missings and conserving labels
+* parameters:
+*   hhid: unique identifier for households
+*   itemid: unique identifier for items
+*   value: variable capturing the value of consumption
+*   [REDuced]: number of items to include in the final dataset (scaled to approx sum up to total consumption)
+capture: program drop fItems2RCS
+program define fItems2RCS
+	syntax , hhid(varname) itemid(varname) value(varname) [REDuced(integer 0)]
+	* save the value labels for variables in local list
+	quiet: levelsof `itemid', local(`itemid'_levels)
+	foreach val of local `itemid'_levels {
+		local `itemid'_`val' : label `: value label `itemid'' `val'
+	}
+	*create zeros for missing values
+	quiet: reshape wide `value', i(`hhid') j(`itemid')
+	foreach v of varlist `value'* {
+		quiet: replace `v'=0 if `v'>=.
+	}
+	*reduce dataset if needed
+	quiet: if (`reduced'>0) {
+		*work in long dataset (but need zero values)
+		reshape long `value', i(`hhid') j(`itemid')
+		bysort `hhid': egen xt = total(`value')
+		gen pt = `value' / xt
+		bysort `itemid': egen ppt = mean(pt)
+		egen r = rank(ppt)
+		replace r= -r
+		egen rr = group(r)
+		*calculate scaling factor (is done in constant multiples of households)
+		egen scale = total(ppt) if rr > `reduced'
+		egen xscale = total(ppt)
+		gen x = scale/xscale
+		egen xfactor = mean(x)
+		drop if rr > `reduced'
+		replace `value' = `value' / xfactor
+		quiet: summ xfactor
+		local xf = 1-r(mean)
+		drop xt pt ppt r rr scale x xscale xfactor
+		reshape wide `value', i(`hhid') j(`itemid')
+	}
+	if (`reduced'>0) di "Reduced consumption items to `reduced' item, capturing `xf' of consumption."
+	*reinstantiate labels
+	foreach val of local `itemid'_levels {
+		capture: label var `value'`val' "``itemid'_`val''"
+	}
+end
+
