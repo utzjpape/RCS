@@ -113,6 +113,30 @@ gen urban=(strata==2)
 rename (nchild nadult nsenior hhsex hhtoilet hhtenure hhcook hhrooms pchild psenior hhlit) (mcon_=)
 rename (hhhouse hhedu hhwor) (mcat_=)
 compress
+drop hhunits nfdremcs nfdremfd nfdremot
+order hhid strata urban cluster weight hhsize xdurables mcat* mcon*
+label var hhid "Unique household ID"
+label var hhsize "Number of household members"
+label var urban "Is urban"
+label var cluster "Geographic cluster"
+label var weight "Sampling weight"
+label var xdurables "Consumption flow of durables"
+label var mcat_hhedu "Education of household head"
+label var mcat_hhwor "Employment status of household head"
+label define lwor 0 "Not working" 1 "Paid employee" 3 "Own account" 4 "Unpaid family worker"
+label val mcat_hhwor lwor
+label var mcat_hhhouse "Type of dwelling" 
+label var mcon_nchild "Number of children"
+label var mcon_nadult "Number of adults"
+label var mcon_nsenior "Number of senior"
+label var mcon_hhsex "Sex of household head"
+label var mcon_hhlit "Household is literate"
+label var mcon_hhtenure "Has tenure track"
+label var mcon_hhrooms "Number of rooms"
+label var mcon_hhcook "Uses improved cooking"
+label var mcon_hhtoilet "Has improved toilet"
+label var mcon_pchild "Proportion of children"
+label var mcon_psenior "Proportion of seniors"
 save "${gsdData}/KEN-HHData.dta", replace
 
 *check whether we can reconstruct the consumption aggregate at the item level
