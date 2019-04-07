@@ -29,17 +29,18 @@ program .prepare
 		quiet {
 			*as model selection can take some time for many variables, we use first simulation only
 			*but model selection is robust against using different simulations
-			egen model = rowtotal(xfcons*_pc xnfcons*_pc xdurables_pc)
+			egen model = rowtotal(xfcons*_pc xnfcons*_pc)
 			gen logmodel = log(model)
 			replace logmodel = log(.01) if missing(logmodel)
 			foreach m in model logmodel {
-				xi: vselect `m' i.strata hhsize urban `mcon' `mcat' [pweight=weight], best fix(i.hhmod i.pxdurables_pc)
+				xi: vselect `m' i.strata hhsize urban i.pxdurables_pc `mcon' `mcat' [pweight=weight], best fix(i.hhmod)
 				matrix A = r(info)
 				matrix B = A[1...,colnumb("A","k")],A[1...,colnumb("A","AICC")]
 				vselect_best "B"
 				.`m' = r(best)
 				*output regression
-				eststo: quietly reg `m' `.`m'' i.hhmod i.pxdurables_pc [pweight=weight]
+				eststo: quietly reg `m' `.`m'' i.hhmod [pweight=weight]
+				.`m' = "`.`m'' i.pxfcons0_pc i.pxnfcons0_pc"
 				drop `m'
 			}
 		}
@@ -113,15 +114,25 @@ program define .est_tobit
 	*start estimation
 	quiet forvalues imod = 1/`.nmodules' {
 		*food
-		capture: tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `.model' i.cluster [aweight=weight], ll(0)
+		capture: tobit xfcons`imod'_pc `.model' i.cluster [aweight=weight], ll(0) tolerance(1e-4) ltolerance(1e-5)
+		local rc = _rc
+		if ~e(converged) di as error "RCS_estimator.est_tobit didn't converge for food module `imod'."
 		*if insufficient sample size, remove cluster variables
-		if (_rc == 2000) tobit xfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `.model' [aweight=weight], ll(0)
+		if (`rc' == 2000) {
+			tobit xfcons`imod'_pc `.model' [aweight=weight], ll(0)
+			if ~e(converged) di as error "RCS_estimator.est_tobit didn't converge for food module `imod' without cluster variables."
+		}
 		predict y`imod'_pc if xfcons`imod'_pc>=.
 		replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
 		drop y`imod'_pc
 		*non-food
-		capture: tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `.model' i.cluster [aweight=weight], ll(0)
-		if (_rc == 2000) tobit xnfcons`imod'_pc xfcons0_pc xnfcons0_pc xdurables_pc `.model' [aweight=weight], ll(0)
+		capture: tobit xnfcons`imod'_pc `.model' i.cluster [aweight=weight], ll(0) tolerance(1e-4) ltolerance(1e-5)
+		local rc = _rc
+		if ~e(converged) di as error "RCS_estimator.est_tobit didn't converge for non-food module `imod'."
+		if (`rc' == 2000) {
+			tobit xnfcons`imod'_pc `.model' [aweight=weight], ll(0)
+			if ~e(converged) di as error "RCS_estimator.est_tobit didn't converge for non-food module `imod' without cluster variables."
+		}
 		predict y`imod'_pc if xnfcons`imod'_pc>=.
 		replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
 		drop y`imod'_pc
@@ -138,12 +149,12 @@ program define .est_reg
 	*start estimation
 	quiet: forvalues imod = 1/`.nmodules' {
 		*food
-		reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.model' i.cluster [aweight=weight]
+		reg xfcons`imod'_pc `.model' i.cluster [aweight=weight]
 		predict y`imod'_pc if xfcons`imod'_pc>=.
 		replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
 		drop y`imod'_pc
 		*non-food
-		reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.model' i.cluster [aweight=weight]
+		reg xnfcons`imod'_pc `.model' i.cluster [aweight=weight]
 		predict y`imod'_pc if xnfcons`imod'_pc>=.
 		replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
 		drop y`imod'_pc
@@ -167,7 +178,7 @@ program define .est_mi_mvn
 	mi register regular oxfcons?_pc oxnfcons?_pc
 	mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc strata mcon* _I* cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
 	mi register passive xcons_pc xfcons_pc
-	mi impute mvn xfcons?_pc xnfcons?_pc = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.model', add(`.nmi') burnin(1000)
+	mi impute mvn xfcons?_pc xnfcons?_pc = `.model', add(`.nmi') burnin(1000)
 end
 
 *using chained equations
@@ -183,7 +194,7 @@ program define .est_mi_ce
 	mi register regular oxfcons?_pc oxnfcons?_pc
 	mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc strata mcon* _I* cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
 	mi register passive xcons_pc xfcons_pc
-	mi impute chained (regress) xfcons?_pc xnfcons?_pc = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.model', add(`.nmi') report
+	mi impute chained (regress) xfcons?_pc xnfcons?_pc = `.model', add(`.nmi') report
 end
 
 *log regressions with multiple imputations
@@ -269,17 +280,17 @@ program define .est_mi_reg
 	mi register regular hh* cluster strata mcon* _I* cfcons_pc cnfcons_pc pxfcons0_pc pxnfcons0_pc pxdurables_pc
 	*run ols or truncated regression
 	if ("`regfunc'"=="normal") {
-		mi impute regress y = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.`log'model', add(`.nmi') by(imod food)
+		mi impute regress y = `.`log'model', add(`.nmi') by(imod food)
 	}
 	else if ("`regfunc'"=="truncated") {
 		*replace zeros as they cannot be considered in the regression (can't be called as log)
 		summ y if y>0
 		replace y = r(min) if y==0
-		mi impute truncreg y = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.model', ll(0) add(`.nmi') by(imod food) force
+		mi impute truncreg y = `.model', ll(0) add(`.nmi') by(imod food) force
 		mi xeq: replace y = 0 if missing(y) | y_0
 	}
 	else if ("`regfunc'"=="twostep") {
-		mi impute chained (logit) y_0 (reg, cond(if y_0==0)) y = i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `.`log'model', add(`.nmi') by(imod food)
+		mi impute chained (logit) y_0 (reg, cond(if y_0==0)) y = `.`log'model', add(`.nmi') by(imod food)
 	}
 	*transform into household-level dataset
 	keep hhid xdurables_pc ccons_pc rcons_pc y y_0 _* imod food hhsize fcore nfcore oxfcons* oxnfcons*
