@@ -94,7 +94,21 @@ mi set wide
 mi register imputed y y_0
 mi register regular imod food
 mi register regular hh* cluster strata mcon* _I* pxfcons0_pc pxnfcons0_pc pxdurables_pc
-mi impute chained (logit, augment) y_0 (reg, cond(if y_0==0)) y = `model', add(`nmi') by(imod food)
+*run two-step if zero-module consumption, or one-step regression if not
+quiet: levelsof imod, local(lmod)
+local add = "add(`nmi')"
+forvalues food = 0/1 {
+	foreach imod of local lmod {
+		count if (y_0==1) & ((imod==`imod') & (food==`food'))
+		if r(N)>0 {
+			mi impute monotone (logit, augment) y_0 (reg, cond(if y_0==0)) y = `model' if imod==`imod' & food==`food', `add'
+		}
+		else {
+			mi impute reg y = `.model' if imod==`imod' & food==`food', `add'
+		}
+		local add = "replace"
+	}
+}
 *transform into household-level dataset and out of log-space
 keep hhid xdurables_pc y y_0 _* imod food fcore nfcore
 mi xeq: replace y = exp(y)
