@@ -303,7 +303,7 @@ program define .est_mi_reg
 					mi impute monotone (logit, augment) y_0 (reg, cond(if y_0==0)) y = `.`log'model' if imod==`imod' & food==`food', `add'
 				}
 				else {
-					mi impute monotone reg y = `.`log'model' if imod==`imod' & food==`food', `add'
+					mi impute reg y = `.`log'model' if imod==`imod' & food==`food', `add'
 				}
 				local add = "replace"
 			}
