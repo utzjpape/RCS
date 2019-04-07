@@ -1,6 +1,5 @@
 *Prepare Kenya data
 
-clear all
 ma drop all
 set more off
 
@@ -14,8 +13,6 @@ local sData = "${gsdDataBox}/KEN-KIHBS2005"
 local xpovline = 1.90 * 35.42 / 114.022 * 55.527
 *Poverty line from povcalnet
 local xpovline = 1.90 * 35.4296
-
-include "${gsdDo}/fRCS.do"
 
 *CREATE MODULES 
 *for validation of the method, missing data is assumed to be missing
@@ -115,6 +112,7 @@ gen urban=(strata==2)
 *prepare variable names for model selection
 rename (nchild nadult nsenior hhsex hhtoilet hhtenure hhcook hhrooms pchild psenior hhlit) (mcon_=)
 rename (hhhouse hhedu hhwor) (mcat_=)
+compress
 save "${gsdData}/KEN-HHData.dta", replace
 
 *check whether we can reconstruct the consumption aggregate at the item level
@@ -130,3 +128,34 @@ local model = "hhsize mcon_pchild mcon_psenior i.mcon_hhsex i.mcat_hhedu i.mcat_
 reg y2_i `model'
 gen ly2_i = log(y2_i)
 reg ly2_i `model'
+
+*produce reduced dataset
+use "${gsdData}/KEN-HHData.dta", clear
+gen r = runiform()
+bysort cluster: egen xr = mean(r)
+drop if xr < .5
+drop r xr
+tempfile fhh
+save "`fhh'", replace
+local id = "hhid cluster id_hh"
+local lis = "food nonfood"
+foreach food of local lis {
+	use "`fhh'", clear
+	keep `id' x`food'*
+	reshape long x`food', i(`id') j(fid)
+	replace x`food' = 0 if missing(x`food')
+	bysort hhid cluster id_hh: egen xtotal= total(x`food')
+	gen r`food' = x`food' / xtotal
+	bysort fid: egen xshare = mean(r`food')
+	drop if xshare < .001
+	drop xtotal r`food' xshare
+	reshape wide x`food', i(hhid cluster id_hh) j(fid)
+	tempfile f`food'
+	save "`f`food''", replace
+}
+use "`fhh'", clear
+drop xfood* xnonfood*
+merge 1:1 `id' using "`ffood'", assert(match) nogen
+merge 1:1 `id' using "`fnonfood'", assert(match) nogen
+compress
+save "${gsdData}/KEN-HHDatared.dta", replace
