@@ -1047,10 +1047,10 @@ program define .analyze
 	}
 	capture which grc1leg2
 	if _rc==111 {
-		graph combine `gcmb'
+		graph combine `gcmb', name(gcmb)
 	}
 	else {
-		grc1leg2 `gcmb'
+		grc1leg2 `gcmb', name(gcmb)
 	}
 	graph export "`.lc_sdOut'/fgt`sfsuff'.png", replace	
 	graph drop `gcmb'
@@ -1069,7 +1069,9 @@ program define .analyze
 	capture: graph drop g_metric
 	graph bar (mean) p, over(method, label(angle(45) labsize(tiny))) over(indicator) by(metric, yrescale) ylabel(,angle(0)) name(g_metric)
 	graph export "`.lc_sdOut'/metrics`sfsuff'.png", replace
+	graph drop g_metric g_dabs gcmb
 	table method indicator metric, c(mean p) format(%9.2f)
+	save "`.lc_sdOut'/metrics`sfsuff'.dta", replace
 end
 
 program define .run

@@ -30,7 +30,7 @@ local lmethod = "med avg reg tobit mi_ce mi_reg mi_regl mi_2ce mi_2cel"
 local lk = "1 5 10 20 50"
 local lk = "0 50"
 
-*run over different p
+*run over different number of core
 foreach k of local lk {
 	local ncoref = `k'
 	local ncorenf = `k'
@@ -46,3 +46,28 @@ foreach k of local lk {
 	.r.collate
 	.r.analyze
 }
+
+*run over different number of modules
+forvalues k = 2/9 {
+	local ncoref = 0
+	local ncorenf = 0
+	local dirbase = "${gsdOutput}/KEN`red'-c0-m`k'"
+	
+	*create instance to run RCS simulations
+	capture classutil drop .r
+	.r = .RCS.new
+	*.r.test
+	.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`k') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(3)
+	.r.mask , nsim(`nsim')
+	.r.estimate , lmethod("`lmethod'") nmi(`nmi')
+	.r.collate
+	.r.analyze
+	gen k = `k'
+	tempfile fh`k'
+	save "`fh`k''", replace
+}
+clear
+forvalues k = 2/9 {
+	append using "`fh`k''"
+}
+table method k metric if indicator=="fgt0", c(mean p) format(%9.2f)
