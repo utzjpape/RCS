@@ -292,7 +292,7 @@ program define .est_mi_reg
 	else if ("`regfunc'"=="twostep") {
 		*step conditional step if almost all hh have module consumption >0
 		bysort food imod: egen ny_0 = mean(y_0)
-		replace y_0 = 0 if ny_0 < 0.01
+		replace y_0 = 0 if ny_0 < 0.05
 		drop ny_0
 		levelsof imod, local(lmod)
 		local add = "add(`.nmi')"
