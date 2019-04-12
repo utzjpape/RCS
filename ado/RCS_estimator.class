@@ -2,68 +2,126 @@
 version 14.2
 
 class RCS_estimator {
-	string lc_sdTemp
-	string lc_sdOut
-	double nmodules
 	double nmi
+	double nmodules
 	string model
 	string logmodel
-	string xi
+	string weight
+	string hhmod
+	string cluster
+	string register
 	double init = 0
 }
+program .new
+	*check whether package is installed
+	capture : which vselect
+	if (_rc) {
+		display as result in smcl `"Please install package {it:vselect} from SSC in order to run this do-file;"' _newline `"you can do so by clicking this link: {stata "ssc install vselect":auto-install vselect}"'
+		exit 199
+	}
+	capture : which esttab
+	if (_rc) {
+		display as result in smcl `"Please install package {it:st0085_2} for esttab from SSC in order to run this do-file;"' _newline `"you can do so by clicking this link: {stata "net install st0085_2.pkg":net install st0085_2.pkg, from(http://www.stata-journal.com/software/sj14-2/)}"'
+		exit 199
+	}
+end
+* prepares estimator by selecting best model
+* parameters:
+*    [varlist]: variables to be included in model selection. Do not use i. notation, but apply xi before.
+*    hhid: household id variable names
+*    weight: variable name of the weight variable
+*    hhmod: variable name of the module assignment of the household
+*    cluster: variable name for clusters
+*    xfcons: variable name stub for food consumption module, e.g. xfcons for xfcons0, xfcons1, ...
+*    xnfcons: variable name stub for non-food consumption module, e.g. xnfcons for xnfcons0, xnfcons1, ...
+*    fix: variable list of variables to include into the model AFTER model selection
+*    [model]: variable list for the model
+*    [logmodel]: variable list of the log model
+*    [nmi]: number of imputations (default: 1)
+* notes:
+*    either varlist or model and logmodel must be defined
 program .prepare
-	syntax , dirbase(string) nmodules(integer) [force nmi(integer 1)]
-	*setup parameters
-	.lc_sdTemp = "`dirbase'/Temp"
-	.lc_sdOut = "`dirbase'/Out"
-	.nmodules = `nmodules'
+	syntax [varlist(fv)], hhid(varlist) weight(varname) hhmod(varname) cluster(varname) xfcons(name) xnfcons(name) [fix(varlist fv) model(varlist fv) logmodel(varlist fv) nmi(integer 1)]
+	*check parameters
+	if ("`varlist'"=="") & (("`model'"=="") | ("`logmodel'"=="")) {
+		di as error "RCS_estimator.prepare: either variable list for model, or model and logmodel must be defined."
+		error 1
+	}
+	.hhid = "`hhid'"
+	.weight = "`weight'"
+	.hhmod = "`hhmod'"
+	.cluster = "`cluster'"
+	quiet: levelsof `hhmod', local(modules)
+	.nmodules = max(`: subinstr local modules " " ",", all')
+	.xfcons = "`xfcons'"
+	.xnfcons = "`xnfcons'"
 	.nmi = `nmi'
-	*variable xi expansion
-	unab mcon : mcon_*
-	fvunab mcat : i.mcat_*
-	.xi = "i.strata `mcat' i.pxdurables_pc"
-	capture confirm file "`.lc_sdTemp'/model.txt"
-	if ((_rc>0) | ("`force'"!="")) {
-		*get model, save specification in local macros model and logmodel
-		di "Obtaining model structure ..."
-		quiet {
-			*as model selection can take some time for many variables, we use first simulation only
-			*but model selection is robust against using different simulations
-			egen model = rowtotal(xfcons*_pc xnfcons*_pc)
-			gen logmodel = log(model)
-			replace logmodel = log(.01) if missing(logmodel)
-			foreach m in model logmodel {
-				xi: vselect `m' i.strata hhsize urban i.pxdurables_pc `mcon' `mcat' [pweight=weight], best fix(i.hhmod)
+	*check whether variables are correctly given
+	quiet: duplicates tag `hhid', generate(dtag)
+	quiet: count if dtag>0
+	if r(N)>0 {
+		di as error "RCS_estimator.prepare: variables in hhid (set to `hhid') must uniquely identify records."
+		error 1
+	}
+	drop dtag
+	forvalues imod = 0/`.nmodules' {
+		capture: confirm var `.xfcons'`imod'
+		if _rc>0 {
+			di as error "RCS_estimator.prepare: Can't find variable `.xfcons'`imod'. Check name of stub for food module consumption."
+			error 1
+		}
+		capture: confirm var `.xnfcons'`imod'
+		if _rc>0 {
+			di as error "RCS_estimator.prepare: Can't find variable `.xnfcons'`imod'. Check name of stub for non-food module consumption."
+			error 1
+		}
+	}
+	*get model, save specification in local macros model and logmodel
+	di "Obtaining model structure ..."
+	quiet {
+		*as model selection can take some time for many variables, we use first simulation only
+		*but model selection is robust against using different simulations
+		egen model = rowtotal(`xfcons'* `xnfcons'*)
+		gen logmodel = log(model)
+		replace logmodel = log(.01) if missing(logmodel)
+		foreach m in model logmodel {
+			if ("``m''"=="") {
+				xi: vselect `m' `varlist' [pweight=`.weight'], best fix(i.`.hhmod')
 				matrix A = r(info)
 				matrix B = A[1...,colnumb("A","k")],A[1...,colnumb("A","AICC")]
 				vselect_best "B"
 				.`m' = r(best)
 				*output regression
-				eststo: quietly reg `m' `.`m'' i.hhmod [pweight=weight]
-				.`m' = "`.`m'' i.pxfcons0_pc i.pxnfcons0_pc"
-				drop `m'
+				eststo: quietly reg `m' `.`m'' i.`.hhmod' [pweight=`.weight']
+				esttab , r2 ar2 aic
+				.`m' = "`.`m'' `fix'"
 			}
+			else {
+				.`m' = ``m''
+			}
+			drop `m'
 		}
-		esttab , r2 ar2 aic
-		esttab using "`.lc_sdOut'/Model.csv", r2 ar2 aic replace
-		eststo clear
-		*save models
-		capture file close fhm
-		file open fhm using "`.lc_sdTemp'/model.txt", replace write
-		file write fhm "`.model'" _n "`.logmodel'"
-		file close fhm
 	}
-	else {
-		*load saved models
-		capture file close fhm
-		file open fhm using "`.lc_sdTemp'/model.txt", read
-		file read fhm model 
-		file read fhm logmodel
-		file close fhm
-		.model = "`model'"
-		.logmodel = "`logmodel'"
-	}
+	*prepare variable registration for mi
+	local model = "`.model'"
+	local logmodel = "`.logmodel'"
+	local smodel : subinstr local model "i." "", all
+	local slogmodel : subinstr local logmodel "i." "", all
+	local register = "`smodel' `slogmodel'"
+	.register = "`: list uniq register'"
 	.init=1
+end
+program define .estimate
+	syntax , method(string)
+	*save dataset to restore afterwards
+	tempfile fh
+	unab x_order : *
+	quiet: save "`fh'", replace
+	*run estimation and store results
+	.est_`method'
+	*add original file variables
+	quiet: merge 1:1 `.hhid' using "`fh'", nogen assert(match)
+	order `x_order', first
 end
 
 *******************************
@@ -79,10 +137,10 @@ program define .est_avg
 	}
 	*start estimation
 	quiet: forvalues imod = 1/`.nmodules' {
-		egen avg_xfcons`imod'_pc = mean(xfcons`imod'_pc)
-		replace xfcons`imod'_pc = avg_xfcons`imod'_pc if xfcons`imod'_pc>=.
-		egen avg_xnfcons`imod'_pc = mean(xnfcons`imod'_pc)
-		replace xnfcons`imod'_pc = avg_xnfcons`imod'_pc if xnfcons`imod'_pc>=.
+		egen avg_xfcons`imod' = mean(xfcons`imod')
+		replace xfcons`imod' = avg_xfcons`imod' if xfcons`imod'>=.
+		egen avg_xnfcons`imod' = mean(xnfcons`imod')
+		replace xnfcons`imod' = avg_xnfcons`imod' if xnfcons`imod'>=.
 	}
 	drop avg_x*
 end
@@ -95,11 +153,11 @@ program define .est_med
 		error 1
 	}
 	*start estimation
-	quiet: forvalues imod = 1/`.nmodules' {
-		egen avg_xfcons`imod'_pc = median(xfcons`imod'_pc)
-		replace xfcons`imod'_pc = avg_xfcons`imod'_pc if xfcons`imod'_pc>=.
-		egen avg_xnfcons`imod'_pc = median(xnfcons`imod'_pc)
-		replace xnfcons`imod'_pc = avg_xnfcons`imod'_pc if xnfcons`imod'_pc>=.
+	quiet: forvalues imod =1/`.nmodules' {
+		egen avg_xfcons`imod' = median(xfcons`imod')
+		replace xfcons`imod' = avg_xfcons`imod' if xfcons`imod'>=.
+		egen avg_xnfcons`imod' = median(xnfcons`imod')
+		replace xnfcons`imod' = avg_xnfcons`imod' if xnfcons`imod'>=.
 	}
 	drop avg_x*
 end
@@ -112,30 +170,30 @@ program define .est_tobit
 		error 1
 	}
 	*start estimation
-	quiet forvalues imod = 1/`.nmodules' {
+	quiet forvalues imod =1/`.nmodules' {
 		*food
-		capture: tobit xfcons`imod'_pc `.model' i.cluster [aweight=weight], ll(0) tolerance(1e-4) ltolerance(1e-5)
+		capture: tobit xfcons`imod' `.model' i.`.cluster' [aweight=`.weight'], ll(0) tolerance(1e-4) ltolerance(1e-5)
 		local rc = _rc
 		if ~e(converged) di as error "RCS_estimator.est_tobit didn't converge for food module `imod'."
 		*if insufficient sample size, remove cluster variables
 		if (`rc' == 2000) {
-			tobit xfcons`imod'_pc `.model' [aweight=weight], ll(0)
+			tobit xfcons`imod' `.model' [aweight=`.weight'], ll(0)
 			if ~e(converged) di as error "RCS_estimator.est_tobit didn't converge for food module `imod' without cluster variables."
 		}
-		predict y`imod'_pc if xfcons`imod'_pc>=.
-		replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
-		drop y`imod'_pc
+		predict y`imod' if xfcons`imod'>=.
+		replace xfcons`imod' = max(y`imod',0) if xfcons`imod'>=.
+		drop y`imod'
 		*non-food
-		capture: tobit xnfcons`imod'_pc `.model' i.cluster [aweight=weight], ll(0) tolerance(1e-4) ltolerance(1e-5)
+		capture: tobit xnfcons`imod' `.model' i.`.cluster' [aweight=`.weight'], ll(0) tolerance(1e-4) ltolerance(1e-5)
 		local rc = _rc
 		if ~e(converged) di as error "RCS_estimator.est_tobit didn't converge for non-food module `imod'."
 		if (`rc' == 2000) {
-			tobit xnfcons`imod'_pc `.model' [aweight=weight], ll(0)
+			tobit xnfcons`imod' `.model' [aweight=`.weight'], ll(0)
 			if ~e(converged) di as error "RCS_estimator.est_tobit didn't converge for non-food module `imod' without cluster variables."
 		}
-		predict y`imod'_pc if xnfcons`imod'_pc>=.
-		replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
-		drop y`imod'_pc
+		predict y`imod' if xnfcons`imod'>=.
+		replace xnfcons`imod' = max(y`imod',0) if xnfcons`imod'>=.
+		drop y`imod'
 	}
 end
 
@@ -147,17 +205,17 @@ program define .est_reg
 		error 1
 	}
 	*start estimation
-	quiet: forvalues imod = 1/`.nmodules' {
+	quiet: forvalues imod =1/`.nmodules' {
 		*food
-		reg xfcons`imod'_pc `.model' i.cluster [aweight=weight]
-		predict y`imod'_pc if xfcons`imod'_pc>=.
-		replace xfcons`imod'_pc = max(y`imod'_pc,0) if xfcons`imod'_pc>=.
-		drop y`imod'_pc
+		reg xfcons`imod' `.model' i.`.cluster' [aweight=`.weight']
+		predict y`imod' if xfcons`imod'>=.
+		replace xfcons`imod' = max(y`imod',0) if xfcons`imod'>=.
+		drop y`imod'
 		*non-food
-		reg xnfcons`imod'_pc `.model' i.cluster [aweight=weight]
-		predict y`imod'_pc if xnfcons`imod'_pc>=.
-		replace xnfcons`imod'_pc = max(y`imod'_pc,0) if xnfcons`imod'_pc>=.
-		drop y`imod'_pc
+		reg xnfcons`imod' `.model' i.`.cluster' [aweight=`.weight']
+		predict y`imod' if xnfcons`imod'>=.
+		replace xnfcons`imod' = max(y`imod',0) if xnfcons`imod'>=.
+		drop y`imod'
 	}
 end
 
@@ -174,11 +232,12 @@ program define .est_mi_mvn
 	}
 	*run MI
 	mi set wide
-	mi register imputed xfcons?_pc xnfcons?_pc
-	mi register regular oxfcons?_pc oxnfcons?_pc
-	mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc strata mcon* _I* cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
-	mi register passive xcons_pc xfcons_pc
-	mi impute mvn xfcons?_pc xnfcons?_pc = `.model', add(`.nmi') burnin(1000)
+	mi register imputed xfcons? xnfcons?
+	mi register regular oxfcons? oxnfcons?
+	mi register regular `.register'
+	mi register regular hh* `.cluster' lnxfcons0 lnxnfcons0 strata mcon* _I* cfcons cnfcons xdurables lnxdurables
+	mi register passive xcons xfcons
+	mi impute mvn xfcons? xnfcons? = `.model', add(`.nmi') burnin(1000)
 end
 
 *using chained equations
@@ -190,11 +249,12 @@ program define .est_mi_ce
 	}
 	*run MI
 	mi set wide
-	mi register imputed xfcons?_pc xnfcons?_pc
-	mi register regular oxfcons?_pc oxnfcons?_pc
-	mi register regular hh* cluster lnxfcons0_pc lnxnfcons0_pc strata mcon* _I* cfcons_pc cnfcons_pc xdurables_pc lnxdurables_pc
-	mi register passive xcons_pc xfcons_pc
-	mi impute chained (regress) xfcons?_pc xnfcons?_pc = `.model', add(`.nmi') report
+	mi register imputed xfcons? xnfcons?
+	mi register regular `.register'
+	mi register regular oxfcons? oxnfcons?
+	mi register regular hh* `.cluster' lnxfcons0 lnxnfcons0 strata mcon* _I* cfcons cnfcons xdurables lnxdurables
+	mi register passive xcons xfcons
+	mi impute chained (regress) xfcons? xnfcons? = `.model', add(`.nmi') report
 end
 
 *log regressions with multiple imputations
@@ -259,10 +319,10 @@ program define .est_mi_reg
 		error 1
 	}
 	* reshape to long format
-	ren (xfcons0_pc xnfcons0_pc) (fcore nfcore)
-	ren (xfcons?_pc xnfcons?_pc) (y1? y0?)
-	qui reshape long y0 y1, i(hhid) j(imod)
-	qui reshape long y, i(hhid imod) j(food)
+	ren (`.xfcons'0 `.xnfcons'0) (fcore nfcore)
+	ren (`.xfcons'? `.xnfcons'?) (y1? y0?)
+	qui reshape long y0 y1, i(`.hhid') j(imod)
+	qui reshape long y, i(`.hhid' imod) j(food)
 	*remember 0 consumption
 	gen y_0 = y==0 if !missing(y)
 	if ("`log'"!="") {
@@ -271,13 +331,13 @@ program define .est_mi_reg
 		replace y = log(y)
 	}
 	*get models degrees of freedom and make sure we have sufficient observation
-	*quiet: reg y i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model'
+	*quiet: reg y i.pxfcons0 i.pxnfcons0 i.pxdurables `model'
 	*local df = e(df_m)
 	*run MI
 	mi set wide
 	mi register imputed y y_0
 	mi register regular imod food
-	mi register regular hh* cluster strata mcon* _I* cfcons_pc cnfcons_pc pxfcons0_pc pxnfcons0_pc pxdurables_pc
+	mi register regular `.register'
 	*run ols or truncated regression
 	if ("`regfunc'"=="normal") {
 		mi impute regress y = `.`log'model', add(`.nmi') by(imod food)
@@ -298,7 +358,7 @@ program define .est_mi_reg
 		local add = "add(`.nmi')"
 		forvalues food = 0/1 {
 			foreach imod of local lmod {
-				count if (y_0==1) & ((imod==`imod') & (food==`food'))
+				quiet: count if (y_0==1) & ((imod==`imod') & (food==`food'))
 				if r(N)>0 {
 					mi impute monotone (logit, augment) y_0 (reg, cond(if y_0==0)) y = `.`log'model' if imod==`imod' & food==`food', `add'
 				}
@@ -310,22 +370,18 @@ program define .est_mi_reg
 		}
 	}
 	*transform into household-level dataset
-	keep hhid xdurables_pc ccons_pc rcons_pc y y_0 _* imod food hhsize fcore nfcore oxfcons* oxnfcons*
+	*keep hhid xdurables ccons rcons y y_0 _* imod food hhsize fcore nfcore oxfcons* oxnfcons*
+	keep `.hhid' y y_0 _* imod food fcore nfcore
 	if ("`log'"!="") {
 		mi xeq: replace y = exp(y)
 	}
 	*reshape back to the hh-level
 	mi xeq: replace y = 0 if y_0==1
 	drop y_0
-	mi reshape wide y, i(hhid imod) j(food)
+	mi reshape wide y, i(`.hhid' imod) j(food)
 	mi rename y0 xnfcons
 	mi rename y1 xfcons
-	mi reshape wide xfcons xnfcons, i(hhid) j(imod)
-	foreach v of var xfcons* xnfcons* {
-		mi ren `v' `v'_pc
-	}
-	mi ren fcore xfcons0_pc
-	mi ren nfcore xnfcons0_pc
-	gen xcons_pc = .
-	mi register passive xcons_pc
+	mi reshape wide `.xfcons' `.xnfcons', i(`.hhid') j(imod)
+	mi ren fcore `.xfcons'0
+	mi ren nfcore `.xnfcons'0
 end
