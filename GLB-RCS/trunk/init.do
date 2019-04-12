@@ -94,7 +94,7 @@ else {
 *   [REDuced]: number of items to include in the final dataset (scaled to approx sum up to total consumption)
 capture: program drop fItems2RCS
 program define fItems2RCS
-	syntax , hhid(varname) itemid(varname) value(varname) [REDuced(integer 0)]
+	syntax , hhid(varlist) itemid(varname) value(varname) [REDuced(integer 0)]
 	* save the value labels for variables in local list
 	quiet: levelsof `itemid', local(`itemid'_levels)
 	foreach val of local `itemid'_levels {

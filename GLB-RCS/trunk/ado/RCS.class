@@ -688,15 +688,16 @@ program define .mask
 			*get per capita variables
 			ren (x*cons_t x*cons_r) (c*cons r*cons)
 			foreach v of varlist xfcons* xnfcons* cfcons cnfcons rfcons rnfcons {
-				quiet: gen `v'_pc = `v'/hhsize
+				quiet: replace `v' = `v'/hhsize
+				label var `v' "`: var label `v'' per capita"
 			} 
 			*create percentiles
-			foreach v of varlist xfcons0_pc xnfcons0_pc xdurables_pc {
+			foreach v of varlist xfcons0 xnfcons0 xdurables {
 				xtile p`v' = `v' [pweight=weight], nquantiles(4)
 			}
 			*prepare check variables
-			quiet: gen ccons_pc = cfcons_pc + cnfcons_pc + xdurables_pc
-			quiet: gen rcons_pc = rfcons_pc + rnfcons_pc + xdurables_pc
+			quiet: gen ccons = cfcons + cnfcons + xdurables
+			quiet: gen rcons = rfcons + rnfcons + xdurables
 			quiet: compress
 			save "`.lc_sdTemp'/mi_`isim'.dta", replace
 		}
@@ -730,7 +731,29 @@ program define .estimate
 	}
 	*setup estimator
 	use "`.lc_sdTemp'/mi_1.dta", clear
-	.estimator.prepare , `force' dirbase("`.dirbase'") nmodules(`.nmodules') nmi(`.nmi')
+	*prepare dataset for estimation
+	unab mcon : mcon_*
+	fvunab mcat : i.mcat_*
+	capture confirm file "`.lc_sdTemp'/model.txt"
+	local model = ""
+	local logmodel = ""
+	if ((_rc==0) & ("`force'"=="")) {
+		*load saved models
+		capture file close fhm
+		file open fhm using "`.lc_sdTemp'/model.txt", read
+		file read fhm model 
+		file read fhm logmodel
+		file close fhm
+		quiet: xi i.strata i.pxdurables `mcat'
+	}
+	.estimator.prepare i.strata hhsize urban i.pxdurables `mcon' `mcat', hhid("hhid") weight("weight") hhmod("hhmod") cluster("cluster") xfcons("xfcons") xnfcons("xnfcons") fix("i.pxfcons0 i.pxnfcons0") model("`model'") logmodel("`logmodel'") nmi(`.nmi')
+	esttab using "`.lc_sdOut'/Model.csv", r2 ar2 aic replace
+	eststo clear
+	*save models
+	capture file close fhm
+	file open fhm using "`.lc_sdTemp'/model.txt", replace write
+	file write fhm "`.estimator.model'" _n "`.estimator.logmodel'"
+	file close fhm
 	*start iteration over simulations
 	forvalues isim = 1 / `.nsim' {
 		di "Entering simulation `isim':"
@@ -743,40 +766,39 @@ program define .estimate
 				quiet: cd "`.lc_sdTemp'"
 				*load prepared dataset for mi
 				use "`.lc_sdTemp'/mi_`isim'.dta", clear
-				quiet: xi `.estimator.xi'
+				quiet: xi i.strata i.pxdurables `mcat'
 				*prepare variables
-				quiet: gen xcons_pc = .
-				quiet: gen xfcons_pc = .
-				foreach v of varlist xfcons?_pc xnfcons?_pc xdurables_pc {
+				foreach v of varlist xfcons? xnfcons? xdurables {
 					*save original
 					quiet: gen o`v' = `v'
 					*remove outliers
 					quiet: summ `v',d
 					quiet: replace `v'= `r(p99)' if (`v'>`r(p99)') & (`v'<.)
-					*log transform
-					quiet: gen ln`v' = log(`v')
-					quiet: replace ln`v' = log(.1) if `v'==0
 				}
 				*method selection
 				local mipre = ""
 				quiet: .estimator.est_`smethod'
+				gen xcons = .
 				*check if mi dataset
 				quiet: mi query
-				if "`r(style)'"!="" local mipre = "mi passive:"
+				if "`r(style)'"!="" {
+					local mipre = "mi passive:"
+					mi register passive xcons
+				}
 				*build aggregates; but replace with originals if available
-				quiet: `mipre' replace xcons_pc = xdurables_pc
-				foreach v of varlist xfcons?_pc xnfcons?_pc {
-					quiet: `mipre' replace xcons_pc = xcons_pc + o`v' if ~missing(o`v')
-					quiet: `mipre' replace xcons_pc = xcons_pc + `v' if missing(o`v')
+				quiet: `mipre' replace xcons = xdurables
+				foreach v of varlist xfcons? xnfcons? {
+					quiet: `mipre' replace xcons = xcons + o`v' if ~missing(o`v')
+					quiet: `mipre' replace xcons = xcons + `v' if missing(o`v')
 				}
 				*cleaning
 				if ("`mipre'"!="") {
-					keep hhid xcons_pc ccons_pc rcons_pc _*xcons_pc _mi*
-					mi register imputed xcons_pc
+					keep hhid xcons_pc ccons rcons _*xcons _mi*
+					mi register imputed xcons
 					mi update
 				}
 				else {
-					keep hhid xcons_pc ccons_pc rcons_pc
+					keep hhid xcons ccons rcons
 				}
 				quiet: compress
 				save "`.lc_sdTemp'/sim_`smethod'_`isim'.dta", replace
@@ -809,15 +831,15 @@ program define .collate
 				quiet: if ("`r(style)'"=="") {
 					if (`isim'==1) {
 						*extract reference and reduced
-						ren (xcons_pc ccons_pc rcons_pc) (est1 est0 est99)
+						ren (xcons ccons rcons) (est1 est0 est99)
 						reshape long est, i(hhid) j(x)
 						recode x (99=-1)
 						replace simulation = x
 						drop x
 					}
 					else {
-						ren xcons_pc est
-						drop ccons_pc rcons_pc
+						ren xcons est
+						drop ccons rcons
 					}
 					gen imputation = (simulation>0)
 				}
@@ -825,14 +847,14 @@ program define .collate
 					*convert to long format and get observation for reference and reduced
 					quiet: mi convert flong, clear
 					quiet: mi unset
-					ren (mi_m xcons_pc) (imputation est)
+					ren (mi_m xcons) (imputation est)
 					if (`isim'==1) {
 						expand 2 if imputation==0, gen(x)
 						replace imputation = -1 if x==1
 						drop x
 						*move ref/red indicator from Imputation to Simulation level
-						replace est = ccons_pc if imputation==0
-						replace est = rcons_pc if imputation==-1
+						replace est = ccons if imputation==0
+						replace est = rcons if imputation==-1
 						replace simulation = imputation if imputation <1
 						replace imputation = 0 if imputation < 1
 					}
@@ -884,7 +906,7 @@ program define .collate
 	}
 	.status = 4
 end
-	
+
 *analyzes dataset for all poverty lines	(and programmed more efficiently than the pl version)
 *   urban: -1: no restriction, 0: rural only, 1: urban only
 program define .analyze
