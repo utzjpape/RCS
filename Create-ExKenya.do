@@ -1,13 +1,18 @@
 *prepares example dataset
-local using= "${gsdData}/KEN-HHDatared.dta"
+*which survey? choose 2005P 2015P 2015C
+local s= "2015P"
+local red=""
+local using= "${gsdData}/KEN-KIHBS`s'-HHData`red'.dta"
 capture confirm file "`using'"
 if _rc != 0 {
-	quiet: do "${gsdDo}/prep-KEN.do"
+	quiet: do "${gsdDo}/prep-KEN-KIHBS.do"
 }
 
 *create input dataset for simulation
-local core = `1'
-local nm = `2'
+if "`1'"=="" local core = 0
+else local core = `1'
+if "`2'"=="" local nm = 2
+else local nm = `2'
 local sbase = "${gsdOutput}/KEN-Example_c`core'-m`nm'"
 capture classutil drop .r
 .r = .RCS.new
@@ -26,4 +31,5 @@ forvalues i = 0/`nm' {
 	label var xfcons`i' "Food consumption in module `i'"
 	label var xnfcons`i' "Non-food consumption in module `i'"
 }
-save "${gsdOutput}/KEN-Example_c`core'-m`nm'.dta", replace
+drop px*
+save "${gsdOutput}/KIHBS`s'-Example_c`core'-m`nm'.dta", replace

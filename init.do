@@ -9,6 +9,7 @@ set maxvar 30000
 set matsize 11000
 set seed 23081980 
 set sortseed 11041955
+set maxiter 100
 
 
 if (inlist("${suser}","wb390290","WB390290")) {

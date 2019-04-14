@@ -6,8 +6,8 @@ set more off
 
 *PARAMETERS:
 *number of imputations (should 100 for final results)
-local nmi = 20
-local sfdata = "${gsdOutput}/KEN-Example.dta"
+local nmi = 10
+local sfdata = "${gsdOutput}/KIHBS2015P-Example_c0-m2.dta"
 
 *mata helper functions
 cap mata mata drop vselect_best()
@@ -32,17 +32,12 @@ end
 *********************************************************************************
 capture: use "`sfdata'", clear
 if _rc == 601 {
-	quiet: do "${gsdDo}/Create-ExKenya.do" 10 4
+	quiet: do "${gsdDo}/Create-ExKenya.do" 0 2
 }
 *create per capita variables
 foreach v of var ccons xfcons* xnfcons* xdurables {
 	quiet: replace `v' = `v' / hhsize
 	label var `v' "`: var label `v'' per capita"
-}
-*create quartiles for consumption
-foreach v of var xfcons0 xnfcons0 xdurables {
-	xtile p`v' = `v' [pweight=weight] , n(4)
-	label var p`v' "Quartiles for `: var label `v''"
 }
 tempfile fh
 save "`fh'", replace
@@ -57,7 +52,7 @@ capture classutil drop .re
 *prepare variable lists
 unab mcon : mcon_*
 fvunab mcat : i.mcat_*
-.re.prepare i.strata hhsize urban i.pxdurables `mcon' `mcat', hhid("hhid") weight("weight") hhmod("hhmod") cluster("cluster") xfcons("xfcons") xnfcons("xnfcons") fix("i.pxfcons0 i.pxnfcons0") nmi(`nmi')
+.re.prepare hhsize urban `mcon' `mcat', hhid("hhid") weight("weight") hhmod("hhmod") cluster("cluster") xfcons("xfcons") xnfcons("xnfcons") fix("i.strata") nmi(`nmi')
 tempfile fest
 esttab using "`fest'.csv", r2 ar2 aic replace
 eststo clear
