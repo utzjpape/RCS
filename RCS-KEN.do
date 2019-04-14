@@ -77,11 +77,11 @@ table method k metric if indicator=="fgt0", c(mean p) format(%9.2f)
 
 error 1
 
-	local dirbase = "${gsdOutput}/KEN-KIHBS`s'`red'-c0-m`k'"
+	local dirbase = "${gsdOutput}/KEN-KIHBS`s'`red'-c0-m2"
 	capture classutil drop .r
 	.r = .RCS.new
 	*.r.test
-	.r.prepare using "`using'", dirbase("`dirbase'") nmodules(2) ncoref(0) ncorenf(0) ndiff(3) erase
+	.r.prepare using "`using'", dirbase("`dirbase'") nmodules(2) ncoref(0) ncorenf(0) ndiff(3)
 	.r.mask , nsim(2)
 	.r.estimate , lmethod("avg tobit mi_reg") nmi(5)
 	.r.collate

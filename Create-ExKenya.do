@@ -21,15 +21,14 @@ capture classutil drop .r
 
 *remove variables not needed and label
 use "`sbase'/Temp/mi_1.dta", clear
-gen ccons = cfcons + cnfcons + xdurables
-drop id_hh rfcons rnfcons cfcons cnfcons xfitem* xnfitem* bfitem* bnfitem* *_pc
+drop rfcons rnfcons cfcons cnfcons xfitem* xnfitem* bfitem* bnfitem*
 order hhid strata urban cluster weight hhmod hhsize ccons xfcons* xnfcons* xdurables mcat* mcon*
 label var hhid "Unique household ID"
 label var hhmod "Assigned optional module"
-label var ccons "Full consumption (only used for checking results)"
+label var ccons "Full consumption per capita (only used for checking results)"
 forvalues i = 0/`nm' {
-	label var xfcons`i' "Food consumption in module `i'"
-	label var xnfcons`i' "Non-food consumption in module `i'"
+	label var xfcons`i' "Food consumption in module `i' per capita"
+	label var xnfcons`i' "Non-food consumption in module `i' per capite"
 }
 drop px*
 save "${gsdOutput}/KIHBS`s'-Example_c`core'-m`nm'.dta", replace

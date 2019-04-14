@@ -746,7 +746,8 @@ program define .estimate
 		file close fhm
 		quiet: xi i.strata i.pxdurables `mcat'
 	}
-	.estimator.prepare i.strata hhsize urban i.pxdurables `mcon' `mcat', hhid("hhid") weight("weight") hhmod("hhmod") cluster("cluster") xfcons("xfcons") xnfcons("xnfcons") fix("i.pxfcons0 i.pxnfcons0") model("`model'") logmodel("`logmodel'") nmi(`.nmi')
+	.estimator.prepare , hhid("hhid") weight("weight") hhmod("hhmod") cluster("cluster") xfcons("xfcons") xnfcons("xnfcons") nmi(`.nmi')
+	.estimator.select_model hhsize urban i.pxdurables `mcon' `mcat', fix("i.strata") model("`model'") logmodel("`logmodel'")
 	esttab using "`.lc_sdOut'/Model.csv", r2 ar2 aic replace
 	eststo clear
 	*save models
@@ -777,7 +778,7 @@ program define .estimate
 				}
 				*method selection
 				local mipre = ""
-				quiet: .estimator.est_`smethod'
+				quiet: .estimator.estimate , method("`smethod'")
 				gen xcons = .
 				*check if mi dataset
 				quiet: mi query
@@ -793,7 +794,7 @@ program define .estimate
 				}
 				*cleaning
 				if ("`mipre'"!="") {
-					keep hhid xcons_pc ccons rcons _*xcons _mi*
+					keep hhid xcons ccons rcons _*xcons _mi*
 					mi register imputed xcons
 					mi update
 				}

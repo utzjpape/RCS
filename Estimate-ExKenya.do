@@ -1,69 +1,63 @@
 *estimate optional consumption using a reduced dataset from Kenya KIHBS 2005/6
 
-clear all
 ma drop all
 set more off
+set maxiter 100
 
 *PARAMETERS:
 *number of imputations (should 100 for final results)
+local core = 0
+local nmodules = 2
 local nmi = 10
-local sfdata = "${gsdOutput}/KIHBS2015P-Example_c0-m2.dta"
-
-*mata helper functions
-cap mata mata drop vselect_best()
-mata :
-void vselect_best(string scalar m,string scalar ret) 
-{
-    X = st_matrix(m)
-	k = .
-	x = .
-    for(i=1; i<=rows(X); i++){
-        x = min((x,X[i,2]))
-		if (x==X[i,2]) {
-			k = X[i,1]
-		}
-    }
-	st_local(ret,strofreal(k))
-}
-end
+local sfdata = "${gsdOutput}/KIHBS2015P-Example_c`core'-m`nmodules'.dta"
 
 *********************************************************************************
 *load dataset and prepare per-capita variables, quartiles and transform to logs *
 *********************************************************************************
 capture: use "`sfdata'", clear
 if _rc == 601 {
-	quiet: do "${gsdDo}/Create-ExKenya.do" 0 2
+	quiet: do "${gsdDo}/Create-ExKenya.do" `core' `nmodules'
 }
-*create per capita variables
-foreach v of var ccons xfcons* xnfcons* xdurables {
-	quiet: replace `v' = `v' / hhsize
-	label var `v' "`: var label `v'' per capita"
-}
-tempfile fh
-save "`fh'", replace
 
 ************************************************************
 *find best model in log space of all collected consumption *
 ************************************************************
-use "`fh'", clear
-*create class for model selection and estimation
-capture classutil drop .re
-.re = .RCS_estimator.new
+use "`sfdata'", clear
 *prepare variable lists
 unab mcon : mcon_*
 fvunab mcat : i.mcat_*
-.re.prepare hhsize urban `mcon' `mcat', hhid("hhid") weight("weight") hhmod("hhmod") cluster("cluster") xfcons("xfcons") xnfcons("xnfcons") fix("i.strata") nmi(`nmi')
-tempfile fest
-esttab using "`fest'.csv", r2 ar2 aic replace
-eststo clear
+*read saved model (as finding the model can take a while)
+capture: confirm file "`sfdata'-model.txt"
+if _rc==0 {
+		capture file close fhm
+		file open fhm using "`sfdata'-model.txt", read
+		file read fhm model 
+		file read fhm logmodel
+		file close fhm
+		quiet: xi i.strata `mcat'
+}
+else {
+	local model = ""
+	local logmodel = ""
+}
+*create class for model selection and estimation
+capture classutil drop .re
+.re = .RCS_estimator.new
+.re.prepare , hhid("hhid") weight("weight") hhmod("hhmod") cluster("cluster") xfcons("xfcons") xnfcons("xnfcons") nmi(`nmi')
+.re.select_model hhsize urban `mcon' `mcat', fix("i.strata") model("`model'") logmodel("`logmodel'")
+*save model for next use
+capture file close fhm
+file open fhm using "`sfdata'-model.txt", replace write
+file write fhm "`.re.model'" _n "`.re.logmodel'"
+file close fhm
 
 ************************************************************
 *run estimation *
 ************************************************************
-.re.estimate ,method("mi_2cel")
+.re.est_mi_2cel
 gen xcons = .
 mi register passive xcons
-quiet: mi passive: replace xcons = xdurables
+quiet: mi passive: replace xcons = 0
 foreach v of varlist xfcons? xnfcons? {
 	quiet: mi passive: replace xcons = xcons + `v'
 }
@@ -77,7 +71,7 @@ save "`fh_est'", replace
 * test results by comparing to full consumption *
 *************************************************
 use "`fh_est'", clear
-merge 1:1 hhid using "`fh'", assert(match) nogen
+merge 1:1 hhid using "`sfdata'", assert(match) nogen
 * calculate FGT for all possible poverty lines
 _pctile ccons [pweight=weight*hhsize], nq(100)
 quiet forvalues i = 1/100 {
@@ -110,7 +104,9 @@ order p r_fgt0 x_fgt0 r_fgt1 x_fgt1
 forvalues i = 0/1 {
 	label var r_fgt`i' "FGT`i' Reference"
 	label var x_fgt`i' "FGT`i' RCS"
-	gen dfgt`i' = abs(r_fgt`i'-x_fgt`i')
+	gen zfgt`i' = r_fgt`i'-x_fgt`i'
+	gen dfgt`i' = abs(zfgt`i')
 	label var dfgt`i' "Absolute difference for FGT`i'"
 }
 mean dfgt*
+graph twoway (line zfgt0 p) (line zfgt1 p) 
