@@ -8,7 +8,7 @@ set maxiter 100
 *Poverty line from povcalnet
 local xpovline = 1.90 * 35.4296
 *define as 'red' if using reduced dataset
-local red = "red"
+local red = ""
 *which survey? choose 2005P 2015P 2015C
 local s= "2005P"
 
@@ -77,7 +77,7 @@ table method k metric if indicator=="fgt0", c(mean p) format(%9.2f)
 
 error 1
 
-	local dirbase = "${gsdOutput}/KEN`red'-c0-m2"
+	local dirbase = "${gsdOutput}/KEN-KIHBS`s'`red'-c0-m`k'"
 	capture classutil drop .r
 	.r = .RCS.new
 	*.r.test

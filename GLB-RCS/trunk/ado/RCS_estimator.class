@@ -34,7 +34,7 @@ end
 *    cluster: variable name for clusters
 *    xfcons: variable name stub for food consumption module, e.g. xfcons for xfcons0, xfcons1, ...
 *    xnfcons: variable name stub for non-food consumption module, e.g. xnfcons for xnfcons0, xnfcons1, ...
-*    fix: variable list of variables to include into the model AFTER model selection
+*    fix: variable list of variables to always include into the model model selection
 *    [model]: variable list for the model
 *    [logmodel]: variable list of the log model
 *    [nmi]: number of imputations (default: 1)
@@ -78,7 +78,7 @@ program .prepare
 	}
 	*get model, save specification in local macros model and logmodel
 	di "Obtaining model structure ..."
-	quiet {
+*	quiet {
 		*as model selection can take some time for many variables, we use first simulation only
 		*but model selection is robust against using different simulations
 		egen model = rowtotal(`xfcons'* `xnfcons'*)
@@ -86,22 +86,22 @@ program .prepare
 		replace logmodel = log(.01) if missing(logmodel)
 		foreach m in model logmodel {
 			if ("``m''"=="") {
-				xi: vselect `m' `varlist' [pweight=`.weight'], best fix(i.`.hhmod')
+				xi: vselect `m' `varlist' [pweight=`.weight'], best fix("`fix' i.`.hhmod'")
 				matrix A = r(info)
 				matrix B = A[1...,colnumb("A","k")],A[1...,colnumb("A","AICC")]
 				vselect_best "B"
 				.`m' = r(best)
 				*output regression
-				eststo: quietly reg `m' `.`m'' i.`.hhmod' [pweight=`.weight']
+				eststo: quietly reg `m' `.`m'' `fix' i.`.hhmod' [pweight=`.weight']
 				esttab , r2 ar2 aic
-				.`m' = "`.`m'' `fix'"
+				.`m' = "`.`m'' `fix' i._p`.xfcons'0 i._p`.xnfcons'0"
 			}
 			else {
 				.`m' = ``m''
 			}
 			drop `m'
 		}
-	}
+*	}
 	*prepare variable registration for mi
 	local model = "`.model'"
 	local logmodel = "`.logmodel'"
@@ -117,6 +117,13 @@ program define .estimate
 	tempfile fh
 	unab x_order : *
 	quiet: save "`fh'", replace
+	*prepare estimation
+	*create quartiles for consumption
+	foreach v of var `.xfcons'0 `.xnfcons'0 {
+		xtile _p`v' = `v' [pweight=`.weight'] , n(4)
+		label var _p`v' "Quartiles for `: var label `v''"
+	}
+	
 	*run estimation and store results
 	.est_`method'
 	*add original file variables
