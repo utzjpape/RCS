@@ -707,7 +707,7 @@ end
 
 *will call RCS_estimate_`smethod' defined in fRCS_estimate_.do
 program define .estimate
-	syntax , lmethod(namelist) [force nmi(integer 1)]
+	syntax , lmethod(namelist) [force nmi(integer 1) method(namelist min=1 max=2)]
 	*check preparations
 	if `.status' < 2 {
 		di as error "RCS.estimate: please first run RCS.prepare followed by RCS.mask."
@@ -747,7 +747,7 @@ program define .estimate
 		quiet: xi i.strata i.pxdurables `mcat'
 	}
 	.estimator.prepare , hhid("hhid") weight("weight") hhmod("hhmod") cluster("cluster") xfcons("xfcons") xnfcons("xnfcons") nmi(`.nmi')
-	.estimator.select_model hhsize urban i.pxdurables `mcon' `mcat', fix("i.strata") model("`model'") logmodel("`logmodel'")
+	.estimator.select_model hhsize urban i.pxdurables `mcon' `mcat', fix("i.strata") model("`model'") logmodel("`logmodel'") method("`method'")
 	esttab using "`.lc_sdOut'/Model.csv", r2 ar2 aic replace
 	eststo clear
 	*save models
