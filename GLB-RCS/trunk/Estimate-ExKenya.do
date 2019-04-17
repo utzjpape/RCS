@@ -44,7 +44,7 @@ else {
 capture classutil drop .re
 .re = .RCS_estimator.new
 .re.prepare , hhid("hhid") weight("weight") hhmod("hhmod") cluster("cluster") xfcons("xfcons") xnfcons("xnfcons") nmi(`nmi')
-.re.select_model hhsize urban `mcon' `mcat', fix("i.strata") model("`model'") logmodel("`logmodel'")
+.re.select_model hhsize urban `mcon' `mcat', fix("i.strata") model("`model'") logmodel("`logmodel'") method("forward aicc")
 *save model for next use
 capture file close fhm
 file open fhm using "`sfdata'-model.txt", replace write

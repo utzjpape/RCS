@@ -81,10 +81,15 @@ end
 * notes:
 *    either varlist or model and logmodel must be defined
 program define .select_model
-	syntax [varlist(fv)], [fix(varlist fv) model(varlist fv) logmodel(varlist fv)]
+	syntax [varlist(fv)], [fix(varlist fv) model(varlist fv) logmodel(varlist fv) method(namelist min=1 max=2)]
 	*check parameters
 	if ("`varlist'"=="") & (("`model'"=="") | ("`logmodel'"=="")) {
 		di as error "RCS_estimator.select_model: either variable list for model, or model and logmodel must be defined."
+		error 1
+	}
+	if ("`: word 1 of ""`method'""'"=="") local method = "best"
+	if !inlist("`method'","forward","backward","best") {
+		di as error "RCS_estimator.select_model: method for variable selection must be either 'forward', 'backward' or 'best'."
 		error 1
 	}
 	*get model, save specification in local macros model and logmodel
@@ -97,7 +102,7 @@ program define .select_model
 		replace logmodel = log(.01) if missing(logmodel)
 		foreach m in model logmodel {
 			if ("``m''"=="") {
-				xi: vselect `m' `varlist' [pweight=`.weight'], best fix("`fix' i.`.hhmod'")
+				xi: vselect `m' `varlist' [pweight=`.weight'], `method' fix("`fix' i.`.hhmod'")
 				matrix A = r(info)
 				matrix B = A[1...,colnumb("A","k")],A[1...,colnumb("A","AICC")]
 				vselect_best "B"
