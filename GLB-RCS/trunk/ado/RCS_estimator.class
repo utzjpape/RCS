@@ -87,7 +87,7 @@ program define .select_model
 		di as error "RCS_estimator.select_model: either variable list for model, or model and logmodel must be defined."
 		error 1
 	}
-	if ("`method'"=="") local method = "best"
+	if ("`method'"=="") local method = "forward aicc"
 	if !inlist("`: word 1 of `method''","forward","backward","best") {
 		di as error "RCS_estimator.select_model: method for variable selection must be either 'forward', 'backward' or 'best'."
 		error 1
@@ -124,6 +124,7 @@ program define .select_model
 			esttab , r2 ar2 aic
 			drop `m'
 		}
+		.minmodel = "`fix' i._p`.xfcons'0 i._p`.xnfcons'0"
 *	}
 	*prepare variable registration for mi
 	local model = "`.model'"
@@ -263,10 +264,7 @@ program define .est_mi_mvn
 	*run MI
 	mi set wide
 	mi register imputed xfcons? xnfcons?
-	mi register regular oxfcons? oxnfcons?
 	mi register regular `.register'
-	mi register regular hh* `.cluster' lnxfcons0 lnxnfcons0 strata mcon* _I* cfcons cnfcons xdurables lnxdurables
-	mi register passive xcons xfcons
 	mi impute mvn xfcons? xnfcons? = `.model', add(`.nmi') burnin(1000)
 end
 
@@ -281,9 +279,6 @@ program define .est_mi_ce
 	mi set wide
 	mi register imputed xfcons? xnfcons?
 	mi register regular `.register'
-	mi register regular oxfcons? oxnfcons?
-	mi register regular hh* `.cluster' lnxfcons0 lnxnfcons0 strata mcon* _I* cfcons cnfcons xdurables lnxdurables
-	mi register passive xcons xfcons
 	mi impute chained (regress) xfcons? xnfcons? = `.model', add(`.nmi') report
 end
 
@@ -390,7 +385,12 @@ program define .est_mi_reg
 			foreach imod of local lmod {
 				quiet: count if (y_0==1) & ((imod==`imod') & (food==`food'))
 				if r(N)>0 {
-					mi impute monotone (logit, augment) y_0 (reg, cond(if y_0==0)) y = `.`log'model' if imod==`imod' & food==`food', `add'
+					capture: mi impute monotone (logit, augment) y_0 (reg, cond(if y_0==0)) y = `.`log'model' if imod==`imod' & food==`food', `add'
+					local r= _rc
+					if `r'==430 {
+						mi impute monotone (logit y_0 `.minmodel', augment) (reg y `.`log'model', cond(if y_0==0)) if imod==`imod' & food==`food', custom `add'
+					}
+					else if `r'>0 error `r'
 				}
 				else {
 					mi impute reg y = `.`log'model' if imod==`imod' & food==`food', `add'

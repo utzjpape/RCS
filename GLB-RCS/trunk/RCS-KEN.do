@@ -22,9 +22,9 @@ if _rc != 0 {
 *number of modules
 local nmodules = 2
 *number of simulations (should be 20)
-local nsim = 2
+local nsim = 5
 *number of imputations (should be 50)
-local nmi = 10
+local nmi = 25
 *methods
 local lmethod = "med avg reg tobit mi_ce mi_reg mi_regl mi_2ce mi_2cel"
 
