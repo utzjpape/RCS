@@ -87,8 +87,8 @@ program define .select_model
 		di as error "RCS_estimator.select_model: either variable list for model, or model and logmodel must be defined."
 		error 1
 	}
-	if ("`: word 1 of ""`method'""'"=="") local method = "best"
-	if !inlist("`method'","forward","backward","best") {
+	if ("`method'"=="") local method = "best"
+	if !inlist("`: word 1 of `method''","forward","backward","best") {
 		di as error "RCS_estimator.select_model: method for variable selection must be either 'forward', 'backward' or 'best'."
 		error 1
 	}
@@ -103,10 +103,13 @@ program define .select_model
 		foreach m in model logmodel {
 			if ("``m''"=="") {
 				xi: vselect `m' `varlist' [pweight=`.weight'], `method' fix("`fix' i.`.hhmod'")
-				matrix A = r(info)
-				matrix B = A[1...,colnumb("A","k")],A[1...,colnumb("A","AICC")]
-				vselect_best "B"
-				.`m' = r(best)
+				if ("`: word 1 of `method''"=="best") {
+					matrix A = r(info)
+					matrix B = A[1...,colnumb("A","k")],A[1...,colnumb("A","AICC")]
+					vselect_best "B"
+					.`m' = r(best)
+				}
+				else .`m' = r(predlist)
 			}
 			else {
 				.`m' = "``m''"

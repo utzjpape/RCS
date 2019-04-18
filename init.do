@@ -62,7 +62,7 @@ global gsdTemp = "`swdLocal'/Temp"
 global gsdOutput = "`swdLocal'/Output"
 global gsdDataBox = "`swdBox'"
 *add ado path
-adopath + "${gsdDo}/ado"
+adopath ++ "${gsdDo}/ado"
 
 **If needed, install the directories and packages used in the process 
 capture confirm file "`swdLocal'/Data/nul"
