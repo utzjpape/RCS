@@ -58,8 +58,8 @@ program define .fse, rclass
 	*note that se is the same as the rmse
 	return scalar se = `xsd'
 	return scalar rmse = `xsd'
-	return scalar r_bias = `r_xb'
-	return scalar r_se = `r_xsd'
+	return scalar rbias = `r_xb'
+	return scalar rse = `r_xsd'
 	*coefficient of variation
 	quiet: summ `vref'
 	return scalar cv = `xsd' / r(mean)
