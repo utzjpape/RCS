@@ -98,8 +98,8 @@ program define .select_model
 		*as model selection can take some time for many variables, we use first simulation only
 		*but model selection is robust against using different simulations
 		egen model = rowtotal(`.xfcons'* `.xnfcons'*)
-		gen logmodel = log(model)
-		replace logmodel = log(.01) if missing(logmodel)
+		gen logmodel = ln(model)
+		replace logmodel = ln(.01) if missing(logmodel)
 		foreach m in model logmodel {
 			if ("``m''"=="") {
 				xi: vselect `m' `varlist' [pweight=`.weight'], `method' fix("`fix' i.`.hhmod'")
@@ -353,7 +353,7 @@ program define .est_mi_reg
 	if ("`log'"!="") {
 		*regularize for zero consumption
 		replace y = .01 if y<=0
-		replace y = log(y)
+		replace y = ln(y)
 	}
 	*get models degrees of freedom and make sure we have sufficient observation
 	*quiet: reg y i.pxfcons0 i.pxnfcons0 i.pxdurables `model'
