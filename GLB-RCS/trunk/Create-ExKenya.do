@@ -13,7 +13,7 @@ if "`1'"=="" local core = 0
 else local core = `1'
 if "`2'"=="" local nm = 2
 else local nm = `2'
-local sbase = "${gsdOutput}/KEN-Example_c`core'-m`nm'"
+local sbase = "${gsdOutput}/KEN`s'-Example_c`core'-m`nm'"
 capture classutil drop .r
 .r = .RCS.new
 .r.prepare using "`using'", dirbase("`sbase'") nmodules(`nm') ncoref(`core') ncorenf(`core') ndiff(3)

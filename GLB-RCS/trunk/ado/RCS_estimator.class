@@ -107,9 +107,9 @@ program define .select_model
 					matrix A = r(info)
 					matrix B = A[1...,colnumb("A","k")],A[1...,colnumb("A","AICC")]
 					vselect_best "B"
-					.`m' = r(best)
+					.`m' = "`fix' i._p`.xfcons'0 i._p`.xnfcons'0 `r(best)'"
 				}
-				else .`m' = r(predlist)
+				else .`m' = "`fix' i._p`.xfcons'0 i._p`.xnfcons'0 `r(predlist)'"
 			}
 			else {
 				.`m' = "``m''"
@@ -349,11 +349,11 @@ program define .est_mi_reg
 	qui reshape long y0 y1, i(`.hhid') j(imod)
 	qui reshape long y, i(`.hhid' imod) j(food)
 	*remember 0 consumption
-	gen y_0 = y==0 if !missing(y)
+	quiet: gen y_0 = y==0 if !missing(y)
 	if ("`log'"!="") {
 		*regularize for zero consumption
-		replace y = .01 if y<=0
-		replace y = ln(y)
+		quiet: replace y = .01 if y<=0
+		quiet: replace y = ln(y)
 	}
 	*get models degrees of freedom and make sure we have sufficient observation
 	*quiet: reg y i.pxfcons0 i.pxnfcons0 i.pxdurables `model'
@@ -376,10 +376,10 @@ program define .est_mi_reg
 	}
 	else if ("`regfunc'"=="twostep") {
 		*step conditional step if almost all hh have module consumption >0
-		bysort food imod: egen ny_0 = mean(y_0)
-		replace y_0 = 0 if ny_0 < 0.05
-		drop ny_0
-		levelsof imod, local(lmod)
+*		bysort food imod: egen ny_0 = mean(y_0)
+*		replace y_0 = 0 if ny_0 < 0.05
+*		drop ny_0
+		quiet: levelsof imod, local(lmod)
 		local add = "add(`.nmi')"
 		forvalues food = 0/1 {
 			foreach imod of local lmod {
@@ -402,16 +402,19 @@ program define .est_mi_reg
 	*transform into household-level dataset
 	*keep hhid xdurables ccons rcons y y_0 _* imod food hhsize fcore nfcore oxfcons* oxnfcons*
 	keep `.hhid' y y_0 _* imod food fcore nfcore
-	if ("`log'"!="") {
-		mi xeq: replace y = exp(y)
+	quiet {
+		if ("`log'"!="") mi passive: gen z = exp(y)
+		else mi passive: gen z = y
+		*reshape back to the hh-level
+		mi passive: replace z = 0 if y_0==1
+		drop y_0 y
+		mi register imputed z
+		mi update
+		mi reshape wide z, i(`.hhid' imod) j(food)
+		mi rename z0 xnfcons
+		mi rename z1 xfcons
+		mi reshape wide `.xfcons' `.xnfcons', i(`.hhid') j(imod)
+		mi ren fcore `.xfcons'0
+		mi ren nfcore `.xnfcons'0
 	}
-	*reshape back to the hh-level
-	mi xeq: replace y = 0 if y_0==1
-	drop y_0
-	mi reshape wide y, i(`.hhid' imod) j(food)
-	mi rename y0 xnfcons
-	mi rename y1 xfcons
-	mi reshape wide `.xfcons' `.xnfcons', i(`.hhid') j(imod)
-	mi ren fcore `.xfcons'0
-	mi ren nfcore `.xnfcons'0
 end
