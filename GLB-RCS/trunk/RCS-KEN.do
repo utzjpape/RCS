@@ -28,8 +28,7 @@ local nmi = 25
 *methods
 local lmethod = "med avg reg tobit mi_ce mi_reg mi_regl mi_2ce mi_2cel"
 
-local lk = "1 5 10 20 50"
-local lk = "0 50"
+local lk = "0 1 2 3 4 5 10 20 50"
 
 *run over different number of core
 foreach k of local lk {
@@ -73,10 +72,7 @@ forvalues k = 2/9 {
 }
 table method k metric if indicator=="fgt0", c(mean p) format(%9.2f)
 
-
-
-error 1
-
+if (1==2) {
 	local dirbase = "${gsdOutput}/KEN-KIHBS`s'`red'-c0-m2"
 	capture classutil drop .r
 	.r = .RCS.new
@@ -86,3 +82,4 @@ error 1
 	.r.estimate , lmethod("avg tobit mi_reg") nmi(5)
 	.r.collate
 	.r.analyze
+}
