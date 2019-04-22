@@ -235,7 +235,6 @@ program define .partition
 	*prepare macros
 	local xvalue = "`varlist'"
 	local M = `nmodules'
-	local pc = "_pc"
 	if ("`train'"=="") {
 		expand 2, gen(train)
 		local train = "train"
@@ -300,8 +299,6 @@ program define .partition
 		if r(N)==0 drop `v'
 		else {
 			quiet: replace `v' = 0 if `v'>=.
-			*per capita consumption
-			gen `v'_pc = `v'/`hhsize'
 		}
 	}
 	*assign correct ranks even if missing
@@ -315,10 +312,6 @@ program define .partition
 	if _rc == 133 gen tc =0
 	egen tnc = rowtotal(nc_x*)
 	gen t = tc + tnc
-	capture: egen tc_pc = rowtotal(c_x*_pc)
-	if _rc == 111 gen tc_pc =0
-	egen tnc_pc = rowtotal(nc_x*_pc)
-	gen t_pc = tc_pc + tnc_pc
 	*get maximum number of variables per module
 	local nmax = ceil(`: word count `nc_nlevels'' / `M')
 	*prepare optional modules
@@ -337,7 +330,7 @@ program define .partition
 		*get next item to assign to a module
 		foreach id of local nc_nlevels {
 			if r`id'[1]==`r' {
-				local vnext = "nc_x`id'`pc'"
+				local vnext = "nc_x`id'"
 				local idnext = "`id'"
 			}
 		}
@@ -354,7 +347,7 @@ program define .partition
 				if `m`m'_n'==`n_lowest' local mmax=`m'
 			}
 			*update R2
-			reg t`pc' `hhsize' `m`mmax'_v' `vnext'
+			reg t `hhsize' `m`mmax'_v' `vnext'
 			local diff_m`mmax'_r2 =  e(r2) - `m`mmax'_r2'
 		}
 		else {
@@ -363,7 +356,7 @@ program define .partition
 			forvalues m = 1 / `M' {
 				*only assign to modules which are not yet full
 				if (`m`m'_n'<`nmax') {
-					reg t`pc' `hhsize' `m`m'_v' `vnext'
+					reg t `hhsize' `m`m'_v' `vnext'
 					local diff_m`m'_r2 =  e(r2) - `m`m'_r2'
 					*get largest
 					if (`diff_m`m'_r2' > `diff_m`mmax'_r2') local mmax = `m'
@@ -474,57 +467,6 @@ program define .describe
 	graph combine gRCS_xfood gRCS_xnonfood gRCS_tfood gRCS_tnonfood, graphregion(color(white)) name(gRCS_xcmb, replace)
 	graph export "`.lc_sdOut'/descr_nitems.png", replace
 	graph drop gRCS_xfood gRCS_tfood gRCS_xnonfood gRCS_tnonfood gRCS_xcmb
-end
-* descriptive statistics for the model, based on the full dataset
-program define .describe_model
-	syntax , model(string)
-	*check preparations
-	if .status == 0 {
-		di as error "RCS.describe_model: please first run RCS.prepare."
-		error 1
-	}
-	use "`.lc_sdTemp'/HHData.dta", clear
-	keep hhid xnonfood* xfood*
-	ren xnonfood* xfoodX*
-	reshape long xfood, i(hhid) j(itemid) string
-	*get separate IDs
-	destring itemid, gen(foodid) force
-	destring itemid, gen(nonfoodid) ignore("X")
-	replace nonfoodid = . if !missing(foodid)
-	gen isfood = !missing(foodid)
-	*merge partitioning and collapse
-	merge m:1 foodid using "`.lc_sdTemp'/fsim_fpartition.dta", nogen keep(master match)
-	merge m:1 nonfoodid using "`.lc_sdTemp'/fsim_nfpartition.dta", nogen keep(master match match_update) update
-	collapse xfood, by(hhid itemmod isfood)
-	egen x = concat(isfood itemmod)
-	drop isfood itemmod
-	reshape wide xfood, i(hhid) j(x) string
-	ren (xfood0* xfood1*) (xnfcons* xfcons*)
-	save "`.lc_sdTemp'/modcons.dta", replace
-	*test model
-	use "`.lc_sdTemp'/HHData.dta", clear
-	merge 1:1 hhid using "`.lc_sdTemp'/modcons.dta", nogen keep(match) assert(match)
-	*get per capita variables
-	foreach v of varlist xfcons* xnfcons* {
-		quiet: gen `v'_pc = `v'/hhsize
-	} 
-	*create percentiles
-	foreach v of varlist xfcons0_pc xnfcons0_pc xdurables_pc {
-		xtile p`v' = `v' [pweight=weight], nquantiles(4)
-	}
-	*remove outliers
-	foreach v of varlist xfcons?_pc xnfcons?_pc xdurables_pc {
-		*remove outliers
-		quiet: summ `v',d
-		quiet: replace `v'= `r(p99)' if (`v'>`r(p99)') & (`v'<.)
-	}
-	*run module analytics
-	forvalues imod = 1/`nmodules' {
-		*food
-		reg xfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight]
-		*non-food
-		reg xnfcons`imod'_pc i.pxfcons0_pc i.pxnfcons0_pc i.pxdurables_pc `model' i.cluster [aweight=weight]
-	}
 end
 
 * RCS_mask: creates one output file per simulation with masked consumption
@@ -685,12 +627,7 @@ program define .mask
 			quiet: merge 1:1 hhid using "`.lc_sdTemp'/hh-food-consumption.dta", nogen assert(master match)
 			quiet: merge 1:1 hhid using "`.lc_sdTemp'/hh-nonfood-consumption.dta", nogen assert(master match)
 			order xfcons* xnfcons* xf* bf* xnf* bnf*, last
-			*get per capita variables
 			ren (x*cons_t x*cons_r) (c*cons r*cons)
-			foreach v of varlist xfcons* xnfcons* cfcons cnfcons rfcons rnfcons {
-				quiet: replace `v' = `v'/hhsize
-				label var `v' "`: var label `v'' per capita"
-			} 
 			*create percentiles
 			foreach v of varlist xfcons0 xnfcons0 xdurables {
 				xtile p`v' = `v' [pweight=weight], nquantiles(4)
@@ -773,8 +710,8 @@ program define .estimate
 					*save original
 					quiet: gen o`v' = `v'
 					*remove outliers
-					quiet: summ `v',d
-					quiet: replace `v'= `r(p99)' if (`v'>`r(p99)') & (`v'<.)
+*					quiet: summ `v',d
+*					quiet: replace `v'= `r(p99)' if (`v'>`r(p99)') & (`v'<.)
 				}
 				*method selection
 				local mipre = ""
@@ -886,12 +823,12 @@ program define .collate
 			quiet: drop if simulation==-1
 			order red, after(ref)
 			*remove outliers for ref and est
-			quiet: summ ref,d
-			quiet: replace ref = `r(p99)' if ref>`r(p99)'
-			quiet: summ red,d
-			quiet: replace red = `r(p99)' if red>`r(p99)'
-			quiet: summ est,d
-			quiet: replace est = `r(p99)' if est>`r(p99)'
+*			quiet: summ ref,d
+*			quiet: replace ref = `r(p99)' if ref>`r(p99)'
+*			quiet: summ red,d
+*			quiet: replace red = `r(p99)' if red>`r(p99)'
+*			quiet: summ est,d
+*			quiet: replace est = `r(p99)' if est>`r(p99)'
 			*save for analysis
 			save "`.lc_sdTemp'/simd_`smethod'_imp.dta", replace
 			*collapse imputations

@@ -7,12 +7,12 @@ set maxiter 100
 *PARAMETERS:
 *number of imputations (should 100 for final results)
 local core = 0
-local nmodules = 2
+local nmodules = 4
 local nmi = 10
 local sfdata = "${gsdOutput}/KIHBS2015P-Example_c`core'-m`nmodules'.dta"
 
 *********************************************************************************
-*load dataset and prepare per-capita variables, quartiles and transform to logs *
+*load dataset and prepare quartiles and transform to logs *
 *********************************************************************************
 capture: use "`sfdata'", clear
 if _rc == 601 {
@@ -34,7 +34,7 @@ if _rc==0 {
 		file read fhm model 
 		file read fhm logmodel
 		file close fhm
-		quiet: xi i.strata `mcat'
+		quiet: xi `mcat'
 }
 else {
 	local model = ""
@@ -44,7 +44,7 @@ else {
 capture classutil drop .re
 .re = .RCS_estimator.new
 .re.prepare , hhid("hhid") weight("weight") hhmod("hhmod") cluster("cluster") xfcons("xfcons") xnfcons("xnfcons") nmi(`nmi')
-.re.select_model hhsize urban `mcon' `mcat', fix("i.strata") model("`model'") logmodel("`logmodel'") method("forward aicc")
+.re.select_model hhsize urban `mcon' `mcat', model("`model'") logmodel("`logmodel'") method("forward aicc")
 *save model for next use
 capture file close fhm
 file open fhm using "`sfdata'-model.txt", replace write
@@ -70,6 +70,16 @@ save "`fh_est'", replace
 *************************************************
 * test results by comparing to full consumption *
 *************************************************
+use "`fh_est'", clear
+merge 1:1 hhid using "`sfdata'", assert(match) nogen
+keep _*_xcons ccons _mi_miss weight
+ren _*_xcons xcons*
+mi unset
+egen id = seq()
+reshape long xcons, i(id) j(sim)
+*draw consumption distribution
+twoway (kdensity ccons [pweight=weight]) (kdensity xcons [pweight=weight])
+
 use "`fh_est'", clear
 merge 1:1 hhid using "`sfdata'", assert(match) nogen
 * calculate FGT for all possible poverty lines
@@ -110,3 +120,25 @@ forvalues i = 0/1 {
 }
 mean dfgt*
 graph twoway (line zfgt0 p) (line zfgt1 p) 
+
+
+if (1==2) {
+	use "`fh_est'", clear
+	merge 1:1 hhid using "`sfdata'", assert(match) nogen
+	levelsof hhmod, local(lmod)
+	local lf = "f nf"
+	quiet: mi passive: gen zcons = xfcons0 + xnfcons0
+	foreach imod of local lmod {
+		foreach f of local lf {
+			mean x`f'cons`imod' [pweight=weight]
+			matrix X = e(b)
+			local x = X[1,1]
+			mi estimate: mean x`f'cons`imod' if hhmod != `imod' [pweight=weight]
+			matrix Z = e(b_mi)
+			local z = Z[1,1]
+			di "Factor for imod=`imod' and `f': `=`x'/`z''"
+			quiet: mi passive: replace zcons = zcons + x`f'cons`imod' if hhmod==`imod'
+			quiet: mi passive: replace zcons = zcons + (x`f'cons`imod' / `z' * `x') if hhmod!=`imod'
+		}
+	}
+}

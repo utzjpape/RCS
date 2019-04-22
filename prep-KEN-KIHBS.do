@@ -36,6 +36,12 @@ forvalues i = 1/3 {
 	drop survey
 	merge 1:1 clid hhid using "`ffood'", nogen keep(match) keepusing(xfood*)
 	merge 1:1 clid hhid using "`fnonfood'", nogen keep(match) keepusing(xnonfood*)
+	egen x = rowtotal(xfood* xnonfood*)
+	assert round(totcons-x,10^-4)==0
+	drop x
+	*remove outliers
+	summ totcons, d
+	drop if totcons > 5*r(sd)
 	keep clid urban uid county weight hhsize rooms ownhouse wall roof floor impwater impsan elec_acc depen_cat nchild pchild nadult padult nsenior psenior literacy malehead ageheadg hhedu hhh_empstat asset_index xfood* xnonfood*
 	ren (uid clid county asset_index) (hhid cluster strata assets)
 	ren (rooms ownhouse impwater impsan elec_acc nchild pchild nadult padult nsenior psenior literacy assets) mcon_=
@@ -55,5 +61,3 @@ forvalues i = 1/3 {
 	compress
 	save "${gsdData}/KEN-KIHBS`s'-HHDatared.dta", replace
 }
-
-
