@@ -5,8 +5,6 @@ set more off
 set maxiter 100
 
 *parameters
-*Poverty line from povcalnet
-local xpovline = 1.90 * 35.4296
 *define as 'red' if using reduced dataset
 local red = ""
 *which survey? choose 2005P 2015P 2015C
@@ -19,67 +17,40 @@ if _rc != 0 {
 }
 
 *start RCS code
-*number of modules
-local nmodules = 2
 *number of simulations (should be 20)
-local nsim = 5
+local nsim = 20
 *number of imputations (should be 50)
-local nmi = 25
+local nmi = 50
 *methods
-local lmethod = "med avg reg tobit mi_ce mi_reg mi_regl mi_2ce mi_2cel"
-
+local lmethod = "med avg reg tobit mi_reg mi_2cel"
 local lk = "0 1 2 3 4 5 10 20 50"
 
-*run over different number of core
-foreach k of local lk {
-	local ncoref = `k'
-	local ncorenf = `k'
-	local dirbase = "${gsdOutput}/KEN-KIHBS`s'`red'-c`k'-m`nmodules'"
-	
-	*create instance to run RCS simulations
-	capture classutil drop .r
-	.r = .RCS.new
-	*.r.test
-	.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(3)
-	.r.mask , nsim(`nsim')
-	.r.estimate , lmethod("`lmethod'") nmi(`nmi')
-	.r.collate
-	.r.analyze
-}
-
-*run over different number of modules
-forvalues k = 2/9 {
-	local ncoref = 0
-	local ncorenf = 0
-	local dirbase = "${gsdOutput}/KEN-KIHBS`s'`red'-c0-m`k'"
-	
-	*create instance to run RCS simulations
-	capture classutil drop .r
-	.r = .RCS.new
-	*.r.test
-	.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`k') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(3)
-	.r.mask , nsim(`nsim')
-	.r.estimate , lmethod("`lmethod'") nmi(`nmi')
-	.r.collate
-	.r.analyze
-	gen k = `k'
-	tempfile fh`k'
-	save "`fh`k''", replace
+*run for best method over different number of modules and core
+foreach kc of local lk {
+	forvalues km = 2/9 {
+		local dirbase = "${gsdOutput}/KEN-KIHBS`s'`red'-c`kc'-m`km'"
+		*create instance to run RCS simulations
+		capture classutil drop .r
+		.r = .RCS.new
+		*.r.test
+		.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') ndiff(3)
+		.r.mask , nsim(`nsim')
+		if (`kc'==0) | (`km'==2) .r.estimate , lmethod("`lmethod'") nmi(`nmi')
+		else .r.estimate , lmethod("mi_2cel") nmi(`nmi')
+		.r.collate
+		.r.analyze
+		gen kc = `kc'
+		gen km = `km'
+		tempfile fh`kc'_`km'
+		save "`fh`kc'_`km''", replace
+	}
 }
 clear
-forvalues k = 2/9 {
-	append using "`fh`k''"
+foreach kc of local lk {
+	forvalues km = 2/9 {
+		append using "`fh`kc'_`km''"
+	}
 }
-table method k metric if indicator=="fgt0", c(mean p) format(%9.2f)
-
-if (1==2) {
-	local dirbase = "${gsdOutput}/KEN-KIHBS`s'`red'-c0-m2"
-	capture classutil drop .r
-	.r = .RCS.new
-	*.r.test
-	.r.prepare using "`using'", dirbase("`dirbase'") nmodules(2) ncoref(0) ncorenf(0) ndiff(3)
-	.r.mask , nsim(2)
-	.r.estimate , lmethod("avg tobit mi_reg") nmi(5)
-	.r.collate
-	.r.analyze
-}
+table method km metric if indicator=="fgt0" & kc==0, c(mean p) format(%9.2f)
+table method kc metric if indicator=="fgt0" & km==2, c(mean p) format(%9.2f)
+save "${gsdOutput}/KEN-KIHBS`s'.dta", replace
