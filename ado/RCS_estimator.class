@@ -6,6 +6,7 @@ class RCS_estimator {
 	double nmodules
 	string model
 	string logmodel
+	string minmodel
 	string weight
 	string hhmod
 	string cluster
@@ -230,23 +231,31 @@ end
 
 *use the regression to estimate missing consumption
 program define .est_reg
-	syntax
+	syntax , [log]
 	if (`.init' < 2) {
 		di as error "RCS_estimator must be initialized using .prepare and .select_model before running estimations."
 		error 1
 	}
 	*start estimation
 	quiet: forvalues imod =1/`.nmodules' {
+		if ("`log'"!="") {
+			replace xfcons`imod' = log(xfcons`imod')
+			replace xnfcons`imod' = log(xnfcons`imod')
+		}
 		*food
-		reg xfcons`imod' `.model' i.`.cluster' [aweight=`.weight']
-		predict y`imod' if xfcons`imod'>=.
-		replace xfcons`imod' = max(y`imod',0) if xfcons`imod'>=.
-		drop y`imod'
+		reg xfcons`imod' `.model' [aweight=`.weight']
+		predict y if xfcons`imod'>=.
+		replace xfcons`imod' = max(y,0) if xfcons`imod'>=.
+		drop y
 		*non-food
-		reg xnfcons`imod' `.model' i.`.cluster' [aweight=`.weight']
-		predict y`imod' if xnfcons`imod'>=.
-		replace xnfcons`imod' = max(y`imod',0) if xnfcons`imod'>=.
-		drop y`imod'
+		reg xnfcons`imod' `.model' [aweight=`.weight']
+		predict y if xnfcons`imod'>=.
+		replace xnfcons`imod' = max(y,0) if xnfcons`imod'>=.
+		drop y
+		if ("`log'"!="") {
+			replace xfcons`imod' = exp(xfcons`imod')
+			replace xnfcons`imod' = exp(xnfcons`imod')
+		}
 	}
 end
 

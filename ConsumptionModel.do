@@ -1,55 +1,48 @@
-*estimate optional consumption using a reduced dataset from Kenya KIHBS 2005/6
+clear
+set obs 1000
 
-ma drop all
-set more off
-set maxiter 100
-
-*PARAMETERS:
-*number of imputations (should 100 for final results)
-local core = 10
-local nmodules = 8
+local nmodules = 3
 local nmi = 10
-local sfdata = "${gsdOutput}/KIHBS2015P-Example_c`core'-m`nmodules'.dta"
 
-*********************************************************************************
-*load dataset and prepare quartiles and transform to logs *
-*********************************************************************************
-capture: use "`sfdata'", clear
-if _rc == 601 {
-	quiet: do "${gsdDo}/Create-ExKenya.do" `core' `nmodules'
+gen x = 0
+gen a = abs(rnormal())
+gen b = abs(rnormal())
+gen c = abs(rnormal())
+egen hhmod = seq(), from(1) to(`nmodules')
+local lf = "f nf"
+quiet forvalues i=1/`nmodules' {
+	foreach f of local lf {
+		gen r = rnormal()
+		gen b_a = abs(r[3*`i'])
+		gen b_b = abs(r[3*`i'+1])
+		gen b_c = abs(r[3*`i'+2])
+		gen x`f'cons`i' = b_a * a * exp(r) + b_b * b * exp(r) + b_c * c * exp(r)
+		replace x = x + x`f'cons`i'
+		drop b_? r
+		replace x`f'cons`i' = . if `i'!=hhmod
+	}
 }
 
-************************************************************
-*find best model in log space of all collected consumption *
-************************************************************
-use "`sfdata'", clear
+ren (a b c) mcon_=
+ren x ccons
+gen xfcons0 = 0
+gen xnfcons0 = 0
+gen weight = 1
+gen hhsize = 3
+gen strata = 1
+gen cluster = 1
+egen hhid = seq()
+order hhid strata cluster weight hhmod hhsize mcon_* ccons xfcons? xnfcons?
+tempfile fh
+save "`fh'", replace
+
 *prepare variable lists
 unab mcon : mcon_*
-fvunab mcat : i.mcat_*
-*read saved model (as finding the model can take a while)
-capture: confirm file "`sfdata'-model.txt"
-if _rc==0 {
-		capture file close fhm
-		file open fhm using "`sfdata'-model.txt", read
-		file read fhm model 
-		file read fhm logmodel
-		file close fhm
-		quiet: xi `mcat'
-}
-else {
-	local model = ""
-	local logmodel = ""
-}
 *create class for model selection and estimation
 capture classutil drop .re
 .re = .RCS_estimator.new
 .re.prepare , hhid("hhid") weight("weight") hhmod("hhmod") cluster("cluster") xfcons("xfcons") xnfcons("xnfcons") nmi(`nmi')
-.re.select_model hhsize urban `mcon' `mcat', model("`model'") logmodel("`logmodel'") method("forward aicc")
-*save model for next use
-capture file close fhm
-file open fhm using "`sfdata'-model.txt", replace write
-file write fhm "`.re.model'" _n "`.re.logmodel'"
-file close fhm
+.re.select_model `mcon', method("forward aicc")
 
 ************************************************************
 *run estimation *
@@ -71,7 +64,7 @@ save "`fh_est'", replace
 * test results by comparing to full consumption *
 *************************************************
 use "`fh_est'", clear
-merge 1:1 hhid using "`sfdata'", assert(match) nogen
+merge 1:1 hhid using "`fh'", assert(match) nogen
 keep _*_xcons ccons _mi_miss weight
 ren _*_xcons xcons*
 mi unset
@@ -81,7 +74,7 @@ reshape long xcons, i(id) j(sim)
 twoway (kdensity ccons [aweight=weight]) (kdensity xcons [aweight=weight])
 
 use "`fh_est'", clear
-merge 1:1 hhid using "`sfdata'", assert(match) nogen
+merge 1:1 hhid using "`fh'", assert(match) nogen
 * calculate FGT for all possible poverty lines
 _pctile ccons [pweight=weight*hhsize], nq(100)
 quiet forvalues i = 1/100 {
@@ -120,25 +113,3 @@ forvalues i = 0/1 {
 }
 mean dfgt*
 graph twoway (line zfgt0 p) (line zfgt1 p) 
-
-
-if (1==2) {
-	use "`fh_est'", clear
-	merge 1:1 hhid using "`sfdata'", assert(match) nogen
-	levelsof hhmod, local(lmod)
-	local lf = "f nf"
-	quiet: mi passive: gen zcons = xfcons0 + xnfcons0
-	foreach imod of local lmod {
-		foreach f of local lf {
-			mean x`f'cons`imod' [pweight=weight]
-			matrix X = e(b)
-			local x = X[1,1]
-			mi estimate: mean x`f'cons`imod' if hhmod != `imod' [pweight=weight]
-			matrix Z = e(b_mi)
-			local z = Z[1,1]
-			di "Factor for imod=`imod' and `f': `=`x'/`z''"
-			quiet: mi passive: replace zcons = zcons + x`f'cons`imod' if hhmod==`imod'
-			quiet: mi passive: replace zcons = zcons + (x`f'cons`imod' / `z' * `x') if hhmod!=`imod'
-		}
-	}
-}
