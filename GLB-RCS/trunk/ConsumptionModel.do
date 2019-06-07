@@ -1,30 +1,55 @@
+cap program drop mkcorr
+program define mkcorr
+	 version 4.0 
+
+	 local k = rowsof(P)
+	 matrix A = cholesky(P)
+
+	 local i 1 
+	 quietly {
+		 while `i'<=`k' {
+			 gen c`i' = invnorm(uniform())
+			 local i=`i'+1
+		 }
+		 local i 1
+		 while `i'<=`k' {
+			 matrix row = A[`i',.]
+			 matrix score y`i' = row
+			 local i=`i'+1
+		 }
+		 local i 1 
+		 while `i' <= `k' {
+			 drop c`i'
+			 local i=`i'+1
+		 }
+	 }
+end
+
 clear
-set obs 1000
-
-local nmodules = 3
+*parameters
+local nm = 3
 local nmi = 10
-
-gen x = 0
-gen a = abs(rnormal())
-gen b = abs(rnormal())
-gen c = abs(rnormal())
-egen hhmod = seq(), from(1) to(`nmodules')
-local lf = "f nf"
-quiet forvalues i=1/`nmodules' {
-	foreach f of local lf {
-		gen r = rnormal()
-		gen b_a = abs(r[3*`i'])
-		gen b_b = abs(r[3*`i'+1])
-		gen b_c = abs(r[3*`i'+2])
-		gen x`f'cons`i' = b_a * a * exp(r) + b_b * b * exp(r) + b_c * c * exp(r)
-		replace x = x + x`f'cons`i'
-		drop b_? r
-		replace x`f'cons`i' = . if `i'!=hhmod
+*correlation matrix
+set obs 6000
+local nd = 2*`nm'
+matrix P = 2 * matuniform(`nd',`nd')
+matrix J = J(`nd',`nd',0)
+matrix P = (P-J)' * (P-J)
+matrix D = diag(vecdiag(P))
+*matrix P = P-D + I(`nd')
+*generate data
+mkcorr
+gen ccons = 0
+egen hhmod = seq(), from(1) to(`nm')
+forvalues i = 1/`nd' {
+	gen mcon_`i' = runiform()
+	if `i'<=`nm' {
+		gen xfcons`i' = exp(y`i') + mcon_`i' if hhmod==mod(`i'-1,3)+1
 	}
+	else gen xnfcons`=`i'-`nm'' = exp(y`i') + mcon_`i' if hhmod==mod(`i'-1,3)+1
+	replace ccons = ccons + exp(y`i') + mcon_`i'
 }
-
-ren (a b c) mcon_=
-ren x ccons
+drop y*
 gen xfcons0 = 0
 gen xnfcons0 = 0
 gen weight = 1
@@ -32,7 +57,7 @@ gen hhsize = 3
 gen strata = 1
 gen cluster = 1
 egen hhid = seq()
-order hhid strata cluster weight hhmod hhsize mcon_* ccons xfcons? xnfcons?
+order hhid strata cluster weight hhmod hhsize ccons mcon_* xfcons? xnfcons?
 tempfile fh
 save "`fh'", replace
 
