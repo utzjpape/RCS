@@ -40,7 +40,9 @@ foreach kc of local lk {
 		.r.collate
 		.r.analyze
 		gen kc = `kc'
+		label var kc "Parameter: number of core items"
 		gen km = `km'
+		label var km "Parameter: number of modules"
 		tempfile fh`kc'_`km'
 		save "`fh`kc'_`km''", replace
 	}

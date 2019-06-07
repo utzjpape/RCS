@@ -238,10 +238,10 @@ program .prepare
 		if "`l`v''" == "" local l`v' "`v'"
 	}
 	collapse (mean) nq_ful rnq_ful pqt_ful rpqt_ful pq_ful rpq_ful nq_red rnq_red pqt_red rpqt_red pq_red rpq_red nq_rcs rnq_rcs pqt_rcs rpqt_rcs pq_rcs rpq_rcs nq_cor pqt_cor pq_cor nq_opt pqt_opt pq_opt, by(nmod)
-	save "`.lc_sdTemp'/tstats.dta", replace
 	foreach v of var * {
 		label var `v' "`l`v''"
 	}
+	save "`.lc_sdTemp'/tstats.dta", replace
 	.status = 1
 end
 *RCS_partition xvalue, hhid("hhid") itemid("foodid") fweight("weight") hhsize("hhsize") nmodules(4) ncore(33)
@@ -969,6 +969,8 @@ program define .analyze
 	graph drop g_metric g_dabs gcmb
 	table method indicator metric, c(mean p) format(%9.2f)
 	save "`.lc_sdOut'/metrics`sfsuff'.dta", replace
+	gen nmod = `.nmodules'
+	merge m:1 nmod using "`.lc_sdTemp'/tstats.dta", nogen assert(match)
 end
 
 program define .run
