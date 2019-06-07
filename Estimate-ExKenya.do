@@ -7,16 +7,17 @@ set maxiter 100
 *PARAMETERS:
 *number of imputations (should 100 for final results)
 local core = 10
-local nmodules = 8
+local nmodules = 5
+local random = 0
 local nmi = 10
-local sfdata = "${gsdOutput}/KIHBS2015P-Example_c`core'-m`nmodules'.dta"
+local sfdata = "${gsdOutput}/KIHBS2015P-Example_c`core'-m`nmodules'-r`random'.dta"
 
 *********************************************************************************
 *load dataset and prepare quartiles and transform to logs *
 *********************************************************************************
 capture: use "`sfdata'", clear
 if _rc == 601 {
-	quiet: do "${gsdDo}/Create-ExKenya.do" `core' `nmodules'
+	quiet: do "${gsdDo}/Create-ExKenya.do" `core' `nmodules' `random'
 }
 
 ************************************************************

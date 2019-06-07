@@ -13,11 +13,15 @@ if "`1'"=="" local core = 0
 else local core = `1'
 if "`2'"=="" local nm = 2
 else local nm = `2'
-local sbase = "${gsdOutput}/KEN`s'-Example_c`core'-m`nm'"
+if "`3'"=="" local random = 0
+else local random = `3'
+local sbase = "${gsdOutput}/KEN`s'-Example_c`core'-m`nm'-r`random'"
+if `random'==0 local shares = "demo"
+else local shares = "random"
 capture classutil drop .r
 .r = .RCS.new
-.r.prepare using "`using'", dirbase("`sbase'") nmodules(`nm') ncoref(`core') ncorenf(`core') ndiff(3)
-.r.mask , nsim(1)
+.r.prepare using "`using'", dirbase("`sbase'") nsim(1) nmodules(`nm') ncoref(`core') ncorenf(`core') shares("`shares'")
+.r.mask
 
 *remove variables not needed and label
 use "`sbase'/Temp/mi_1.dta", clear
@@ -31,4 +35,4 @@ forvalues i = 0/`nm' {
 	label var xnfcons`i' "Non-food consumption in module `i' per capite"
 }
 drop px*
-save "${gsdOutput}/KIHBS`s'-Example_c`core'-m`nm'.dta", replace
+save "${gsdOutput}/KIHBS`s'-Example_c`core'-m`nm'-r`random'.dta", replace
