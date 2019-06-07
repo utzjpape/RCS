@@ -18,12 +18,13 @@ if _rc != 0 {
 
 *start RCS code
 *number of simulations (should be 20)
-local nsim = 20
+local nsim = 1
 *number of imputations (should be 50)
 local nmi = 50
 *methods
 local lmethod = "med avg reg tobit mi_reg mi_2cel"
 local lk = "0 1 2 3 4 5 10 20 50"
+local lk = "0 1 2 3 4 5"
 
 *run for best method over different number of modules and core
 foreach kc of local lk {
@@ -33,8 +34,8 @@ foreach kc of local lk {
 		capture classutil drop .r
 		.r = .RCS.new
 		*.r.test
-		.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') ndiff(3)
-		.r.mask , nsim(`nsim')
+		.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim')
+		.r.mask
 		if (`kc'==0) | (`km'==2) .r.estimate , lmethod("`lmethod'") nmi(`nmi')
 		else .r.estimate , lmethod("mi_2cel") nmi(`nmi')
 		.r.collate
