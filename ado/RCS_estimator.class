@@ -95,7 +95,7 @@ program define .select_model
 	}
 	*get model, save specification in local macros model and logmodel
 	di "Obtaining model structure ..."
-*	quiet {
+	quiet {
 		*as model selection can take some time for many variables, we use first simulation only
 		*but model selection is robust against using different simulations
 		egen model = rowtotal(`.xfcons'* `.xnfcons'*)
@@ -126,7 +126,7 @@ program define .select_model
 			drop `m'
 		}
 		.minmodel = "`fix' i._p`.xfcons'0 i._p`.xnfcons'0"
-*	}
+	}
 	*prepare variable registration for mi
 	local model = "`.model'"
 	local logmodel = "`.logmodel'"
@@ -144,11 +144,10 @@ program define .estimate
 	quiet: save "`fh'", replace
 	*prepare estimation
 	*create quartiles for consumption
-	foreach v of var `.xfcons'0 `.xnfcons'0 {
+	quiet foreach v of var `.xfcons'0 `.xnfcons'0 {
 		xtile _p`v' = `v' [pweight=`.weight'] , n(4)
 		label var _p`v' "Quartiles for `: var label `v''"
 	}
-	
 	*run estimation and store results
 	.est_`method'
 	*add original file variables
@@ -271,10 +270,12 @@ program define .est_mi_mvn
 		error 1
 	}
 	*run MI
-	mi set wide
-	mi register imputed xfcons? xnfcons?
-	mi register regular `.register'
-	mi impute mvn xfcons? xnfcons? = `.model', add(`.nmi') burnin(1000)
+	quiet {
+		mi set wide
+		mi register imputed xfcons? xnfcons?
+		mi register regular `.register'
+		mi impute mvn xfcons? xnfcons? = `.model', add(`.nmi') burnin(1000)
+	}
 end
 
 *using chained equations
@@ -285,10 +286,12 @@ program define .est_mi_ce
 		error 1
 	}
 	*run MI
-	mi set wide
-	mi register imputed xfcons? xnfcons?
-	mi register regular `.register'
-	mi impute chained (regress) xfcons? xnfcons? = `.model', add(`.nmi') report
+	quiet {
+		mi set wide
+		mi register imputed xfcons? xnfcons?
+		mi register regular `.register'
+		mi impute chained (regress) xfcons? xnfcons? = `.model', add(`.nmi') report
+	}
 end
 
 *log regressions with multiple imputations
@@ -352,66 +355,59 @@ program define .est_mi_reg
 		di as error "In RCS_estimate_mi_reg, function cannot be called in truncated option with log switched on."
 		error 1
 	}
-	* reshape to long format
-	ren (`.xfcons'0 `.xnfcons'0) (fcore nfcore)
-	ren (`.xfcons'? `.xnfcons'?) (y1? y0?)
-	qui reshape long y0 y1, i(`.hhid') j(imod)
-	qui reshape long y, i(`.hhid' imod) j(food)
-	*remember 0 consumption
-	quiet: gen y_0 = y==0 if !missing(y)
-	if ("`log'"!="") {
-		*regularize for zero consumption
-		quiet: replace y = .01 if y<=0
-		quiet: replace y = ln(y)
-	}
-	*get models degrees of freedom and make sure we have sufficient observation
-	*quiet: reg y i.pxfcons0 i.pxnfcons0 i.pxdurables `model'
-	*local df = e(df_m)
-	*run MI
-	mi set wide
-	mi register imputed y y_0
-	mi register regular imod food
-	mi register regular `.register'
-	*run ols or truncated regression
-	if ("`regfunc'"=="normal") {
-		mi impute regress y = `.`log'model', add(`.nmi') by(imod food)
-	}
-	else if ("`regfunc'"=="truncated") {
-		*replace zeros as they cannot be considered in the regression (can't be called as log)
-		summ y if y>0
-		replace y = r(min) if y==0
-		mi impute truncreg y = `.model', ll(0) add(`.nmi') by(imod food) force
-		mi xeq: replace y = 0 if missing(y) | y_0
-	}
-	else if ("`regfunc'"=="twostep") {
-		*step conditional step if almost all hh have module consumption >0
-*		bysort food imod: egen ny_0 = mean(y_0)
-*		replace y_0 = 0 if ny_0 < 0.05
-*		drop ny_0
-		quiet: levelsof imod, local(lmod)
-		local add = "add(`.nmi')"
-		forvalues food = 0/1 {
-			foreach imod of local lmod {
-				quiet: count if (y_0==1) & ((imod==`imod') & (food==`food'))
-				if r(N)>0 {
-					capture: mi impute monotone (logit, augment) y_0 (reg, cond(if y_0==0)) y = `.`log'model' if imod==`imod' & food==`food', `add'
-					local r= _rc
-					if `r'==430 {
-						mi impute monotone (logit y_0 `.minmodel', augment) (reg y `.`log'model', cond(if y_0==0)) if imod==`imod' & food==`food', custom `add'
+	quiet {
+		* reshape to long format
+		ren (`.xfcons'0 `.xnfcons'0) (fcore nfcore)
+		ren (`.xfcons'? `.xnfcons'?) (y1? y0?)
+		reshape long y0 y1, i(`.hhid') j(imod)
+		reshape long y, i(`.hhid' imod) j(food)
+		*remember 0 consumption
+		gen y_0 = y==0 if !missing(y)
+		if ("`log'"!="") {
+			*regularize for zero consumption
+			replace y = .01 if y<=0
+			replace y = ln(y)
+		}
+		*run MI
+		mi set wide
+		mi register imputed y y_0
+		mi register regular imod food
+		mi register regular `.register'
+		*run ols or truncated regression
+		if ("`regfunc'"=="normal") {
+			mi impute regress y = `.`log'model', add(`.nmi') by(imod food)
+		}
+		else if ("`regfunc'"=="truncated") {
+			*replace zeros as they cannot be considered in the regression (can't be called as log)
+			summ y if y>0
+			replace y = r(min) if y==0
+			mi impute truncreg y = `.model', ll(0) add(`.nmi') by(imod food) force
+			mi xeq: replace y = 0 if missing(y) | y_0
+		}
+		else if ("`regfunc'"=="twostep") {
+			*step conditional step if almost all hh have module consumption >0
+			levelsof imod, local(lmod)
+			local add = "add(`.nmi')"
+			forvalues food = 0/1 {
+				foreach imod of local lmod {
+					count if (y_0==1) & ((imod==`imod') & (food==`food'))
+					if r(N)>0 {
+						capture: mi impute monotone (logit, augment) y_0 (reg, cond(if y_0==0)) y = `.`log'model' if imod==`imod' & food==`food', `add'
+						local r= _rc
+						if `r'==430 {
+							mi impute monotone (logit y_0 `.minmodel', augment) (reg y `.`log'model', cond(if y_0==0)) if imod==`imod' & food==`food', custom `add'
+						}
+						else if `r'>0 error `r'
 					}
-					else if `r'>0 error `r'
+					else {
+						mi impute reg y = `.`log'model' if imod==`imod' & food==`food', `add'
+					}
+					local add = "replace"
 				}
-				else {
-					mi impute reg y = `.`log'model' if imod==`imod' & food==`food', `add'
-				}
-				local add = "replace"
 			}
 		}
-	}
-	*transform into household-level dataset
-	*keep hhid xdurables ccons rcons y y_0 _* imod food hhsize fcore nfcore oxfcons* oxnfcons*
-	keep `.hhid' y y_0 _* imod food fcore nfcore
-	quiet {
+		*transform into household-level dataset
+		keep `.hhid' y y_0 _* imod food fcore nfcore
 		if ("`log'"!="") mi passive: gen z = exp(y)
 		else mi passive: gen z = y
 		*reshape back to the hh-level
