@@ -64,7 +64,7 @@ forvalues t = 0/1 {
 	}
 	clear
 	foreach kc of local lc {
-		forvalues km = 2/9 {
+		foreach km of local lm {
 			append using "`fh`kc'_`km'_`t''"
 		}
 	}
