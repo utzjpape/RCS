@@ -172,6 +172,9 @@ program .prepare
 				egen nred = count(pcons) if itemred
 				egen nmod = max(itemmod)
 				collapse (sum) pcons pcons_train (firstnm) pred pred_train nred nmod (count) ncons=itemid, by(itemmod)
+				replace pred = pred[1] if missing(pred)
+				replace pred_train = pred_train[1] if missing(pred_train)
+				replace nred = nred[1] if missing(nred)
 				ren pcons_train* pcont*
 				reshape wide pcons pcont ncons, i(pred pred_train nred) j(itemmod)
 				egen pq_ful = rowtotal(pcons*)
