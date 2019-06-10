@@ -26,17 +26,25 @@ program define mkcorr
 end
 
 clear
-*parameters
+*parameters: core items, modules, items per module
+local nc = 10
 local nm = 3
+local nm_i = 10
 local nmi = 10
+local p = .25
 *correlation matrix
 set obs 6000
-local nd = 2*`nm'
+local nd = `nc' + `nm' * `nm_i'
 matrix P = 2 * matuniform(`nd',`nd')
-matrix J = J(`nd',`nd',0)
+matrix J = J(`nd',`nd',1)
 matrix P = (P-J)' * (P-J)
 matrix D = diag(vecdiag(P))
 *matrix P = P-D + I(`nd')
+
+
+*TODO
+
+
 *generate data
 mkcorr
 egen hhmod = seq(), from(1) to(`nm')
@@ -52,15 +60,19 @@ forvalues i = 1/`nd' {
 	}
 }
 egen ccons = rowtotal(cfcons* cnfcons*)
+gen xfcons0 = exp(runiform()) + `p' * ccons / 2
+gen xnfcons0 = exp(runiform()) + `p' * ccons / 2
+replace ccons = ccons + xfcons0 + xnfcons0
+gen cfcons0 = xfcons0
+gen cnfcons0 = xnfcons0
 drop y*
-gen xfcons0 = 0
-gen xnfcons0 = 0
 gen weight = 1
 gen hhsize = 3
 gen strata = 1
 gen cluster = 1
 egen hhid = seq()
-order hhid strata cluster weight hhmod hhsize ccons mcon_* xfcons? xnfcons?
+order *, alpha
+order hhid strata cluster weight hhmod hhsize ccons cfcons* cnfcons* mcon_* xfcons? xnfcons?
 tempfile fh
 save "`fh'", replace
 
