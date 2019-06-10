@@ -272,9 +272,9 @@ program define .est_mi_mvn
 	*run MI
 	quiet {
 		mi set wide
-		mi register imputed xfcons? xnfcons?
+		mi register imputed xfcons* xnfcons*
 		mi register regular `.register'
-		mi impute mvn xfcons? xnfcons? = `.model', add(`.nmi') burnin(1000)
+		mi impute mvn xfcons* xnfcons* = `.model', add(`.nmi') burnin(1000)
 	}
 end
 
@@ -288,9 +288,9 @@ program define .est_mi_ce
 	*run MI
 	quiet {
 		mi set wide
-		mi register imputed xfcons? xnfcons?
+		mi register imputed xfcons* xnfcons*
 		mi register regular `.register'
-		mi impute chained (regress) xfcons? xnfcons? = `.model', add(`.nmi') report
+		mi impute chained (regress) xfcons* xnfcons* = `.model', add(`.nmi') report
 	}
 end
 
@@ -358,7 +358,7 @@ program define .est_mi_reg
 	quiet {
 		* reshape to long format
 		ren (`.xfcons'0 `.xnfcons'0) (fcore nfcore)
-		ren (`.xfcons'? `.xnfcons'?) (y1? y0?)
+		ren (`.xfcons'* `.xnfcons'*) (y1* y0*)
 		reshape long y0 y1, i(`.hhid') j(imod)
 		reshape long y, i(`.hhid' imod) j(food)
 		*remember 0 consumption

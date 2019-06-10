@@ -21,9 +21,9 @@ if _rc != 0 {
 local train = 1
 capture classutil drop .r
 .r = .RCS.new
-.r.prepare using "`using`train''", dirbase("${gsdOutput}/KEN-KIHBS-test") nmodules(2) ncoref(10) ncorenf(10) nsim(2) train(`train') erase
+.r.prepare using "`using`train''", dirbase("${gsdOutput}/KEN-KIHBS-test") nmodules(12) ncoref(0) ncorenf(0) nsim(2) train(`train') erase
 .r.mask
-.r.estimate , lmethod("avg mi_2cel") nmi(5)
+.r.estimate , lmethod("avg") nmi(5)
 .r.collate
 .r.analyze
 
@@ -89,7 +89,10 @@ forvalues i=0/2 {
 	foreach m of local lm {
 		local g = "g`i'_`m'"
 		cap graph drop `g'
-		twoway (scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel") (qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel") (scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel") (qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel"), title("FGT`i'", size(normal)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "Reduced" 4 "Reduced (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
+		twoway (scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel") ///
+			(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel") ///
+			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red") ///
+			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red"), title("FGT`i'", size(normal)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "Reduced" 4 "Reduced (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
 		local sg = "`sg' `g'"
 	}
 }
@@ -98,4 +101,24 @@ graph drop `sg'
 graph export "${gsdOutput}/RCS-Red.png", replace
 
 *analysis with training set
-*TODO
+use "${gsdOutput}/KEN-KIHBS-t1.dta", clear
+replace p = abs(p) if metric == "bias"
+collapse (mean) p rpq_red rpq_rcs, by(method indicator metric kc km)
+local sg = ""
+local lm = "bias cv"
+forvalues i=0/2 {
+	foreach m of local lm {
+		local g = "g`i'_`m'"
+		cap graph drop `g'
+		twoway (scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel") ///
+			(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel") ///
+			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red") ///
+			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red") ///
+			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo") ///
+			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo"), title("FGT`i'", size(normal)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "Reduced" 4 "Reduced (fitted)" 5 "LLO" 6 "LLO (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
+		local sg = "`sg' `g'"
+	}
+}
+grc1leg `sg', graphregion(fcolor(white)) col(2)
+graph drop `sg'
+graph export "${gsdOutput}/RCS-Red.png", replace

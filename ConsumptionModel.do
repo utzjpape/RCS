@@ -39,16 +39,19 @@ matrix D = diag(vecdiag(P))
 *matrix P = P-D + I(`nd')
 *generate data
 mkcorr
-gen ccons = 0
 egen hhmod = seq(), from(1) to(`nm')
 forvalues i = 1/`nd' {
 	gen mcon_`i' = runiform()
 	if `i'<=`nm' {
-		gen xfcons`i' = exp(y`i') + mcon_`i' if hhmod==mod(`i'-1,3)+1
+		gen cfcons`i' = exp(y`i') + mcon_`i'
+		gen xfcons`i' = cfcons`i' if hhmod==mod(`i'-1,3)+1
 	}
-	else gen xnfcons`=`i'-`nm'' = exp(y`i') + mcon_`i' if hhmod==mod(`i'-1,3)+1
-	replace ccons = ccons + exp(y`i') + mcon_`i'
+	else {
+		gen cnfcons`=`i'-`nm'' = exp(y`i') + mcon_`i' 
+		gen xnfcons`=`i'-`nm'' = cnfcons`=`i'-`nm'' if hhmod==mod(`i'-1,3)+1
+	}
 }
+egen ccons = rowtotal(cfcons* cnfcons*)
 drop y*
 gen xfcons0 = 0
 gen xnfcons0 = 0
