@@ -141,27 +141,27 @@ program .prepare
 		*check if we need to call
 		capture confirm file "`.lc_sdTemp'/tstats`isim'.dta"
 		if ((_rc>0) | ("`force'"!="")) {
-			*food partition
-			use "`.lc_sdTemp'/HH-Food_traintest.dta", clear
-			quiet: .partition xfood, hhid("hhid") itemid("foodid") fweight("weight") hhsize("hhsize") nmodules(`.nmodules') ncore(`ncoref') shares(`shares')
-			gen itemcode = foodid
-			order itemcode, before(foodid)
-			export excel using "`.lc_sdOut'/FoodConsumption.xls", sheetreplace first(var) sheet("Items (sim=`isim')")
-			keep foodid itemmod itemred pcons*
-			save "`.lc_sdTemp'/fsim_fpartition`isim'.dta", replace
-			*non-food partition
-			use "`.lc_sdTemp'/HH-NonFood_traintest.dta", clear
-			quiet: .partition xnonfood, hhid("hhid") itemid("nonfoodid") fweight("weight") hhsize("hhsize") nmodules(`.nmodules') ncore(`ncorenf') shares(`shares')
-			gen itemcode = nonfoodid
-			order itemcode, before(nonfoodid)
-			*save assignment
-			export excel using "`.lc_sdOut'/NonFoodConsumption.xls", sheetreplace first(var) sheet("Items (sim=`isim')")
-			keep nonfoodid itemmod itemred pcons*
-			save "`.lc_sdTemp'/fsim_nfpartition`isim'.dta", replace
-			
-			*CALCULATE NUMBER OF QUESTIONS AND TIME NEEDED
-			*merge food and non-food
 			quiet {
+				*food partition
+				use "`.lc_sdTemp'/HH-Food_traintest.dta", clear
+				.partition xfood, hhid("hhid") itemid("foodid") fweight("weight") hhsize("hhsize") nmodules(`.nmodules') ncore(`ncoref') shares(`shares')
+				gen itemcode = foodid
+				order itemcode, before(foodid)
+				export excel using "`.lc_sdOut'/FoodConsumption.xls", sheetreplace first(var) sheet("Items (sim=`isim')")
+				keep foodid itemmod itemred pcons*
+				save "`.lc_sdTemp'/fsim_fpartition`isim'.dta", replace
+				*non-food partition
+				use "`.lc_sdTemp'/HH-NonFood_traintest.dta", clear
+				.partition xnonfood, hhid("hhid") itemid("nonfoodid") fweight("weight") hhsize("hhsize") nmodules(`.nmodules') ncore(`ncorenf') shares(`shares')
+				gen itemcode = nonfoodid
+				order itemcode, before(nonfoodid)
+				*save assignment
+				export excel using "`.lc_sdOut'/NonFoodConsumption.xls", sheetreplace first(var) sheet("Items (sim=`isim')")
+				keep nonfoodid itemmod itemred pcons*
+				save "`.lc_sdTemp'/fsim_nfpartition`isim'.dta", replace
+				
+				*CALCULATE NUMBER OF QUESTIONS AND TIME NEEDED
+				*merge food and non-food
 				use "`.lc_sdTemp'/fsim_fpartition`isim'.dta", clear
 				ren foodid nonfoodid
 				append using "`.lc_sdTemp'/fsim_nfpartition`isim'.dta"
@@ -172,9 +172,10 @@ program .prepare
 				egen nred = count(pcons) if itemred
 				egen nmod = max(itemmod)
 				collapse (sum) pcons pcons_train (firstnm) pred pred_train nred nmod (count) ncons=itemid, by(itemmod)
-				reshape wide pcons pcons_train ncons, i(pred pred_train nred) j(itemmod)
-				egen pq_ful = rowtotal(pcons?)
-				egen pqt_ful = rowtotal(pcons_train?)
+				ren pcons_train* pcont*
+				reshape wide pcons pcont ncons, i(pred pred_train nred) j(itemmod)
+				egen pq_ful = rowtotal(pcons*)
+				egen pqt_ful = rowtotal(pcont*)
 				egen nq_ful = rowtotal(ncons*)
 				gen pq_cor = 0
 				gen nq_cor = 0
@@ -182,13 +183,13 @@ program .prepare
 				gen nqt_cor = 0
 				capture: confirm var ncons0
 				if (_rc!=111) {
-					replace pqt_cor = pcons_train0
+					replace pqt_cor = pcont0
 					replace pq_cor = pcons0
 					replace nq_cor = ncons0
-					drop pcons_train0 pcons0 ncons0
+					drop pcont0 pcons0 ncons0
 				}
-				egen pq_opt = rowmean(pcons?)
-				egen pqt_opt = rowmean(pcons_train*)
+				egen pq_opt = rowmean(pcons*)
+				egen pqt_opt = rowmean(pcont*)
 				egen nq_opt = rowmean(ncons*)
 				gen pq_rcs = pq_cor + pq_opt
 				gen pqt_rcs = pqt_cor + pqt_opt
@@ -419,13 +420,13 @@ program define .mask
 	forvalues isim = 1 / `.nsim' {
 		capture: confirm file "`.lc_sdTemp'/mi_`isim'.dta"
 		if ((_rc>0) | ("`force'"!="")) {
-			*get reduced aggregate from training set, to calculate poverty line for LLO
 			quiet {
+				*get reduced aggregate from training set, to calculate poverty line for LLO
 				*reduced consumption for food
 				use "`.lc_sdTemp'/HH-Food_traintest.dta", clear
 				keep if train
-				quiet: merge m:1 foodid using "`.lc_sdTemp'/fsim_fpartition`isim'.dta", nogen assert(match) keepusing(itemred)
-				quiet: gen xfcons_r = xfood if itemred
+				merge m:1 foodid using "`.lc_sdTemp'/fsim_fpartition`isim'.dta", nogen assert(match) keepusing(itemred)
+				gen xfcons_r = xfood if itemred
 				collapse (sum) xfcons_r, by(hhid)
 				tempfile tfood
 				save "`tfood'", replace
@@ -433,8 +434,8 @@ program define .mask
 				use "`.lc_sdTemp'/HH-NonFood_traintest.dta", clear
 				keep if train
 				*get reduced food consumption
-				quiet: merge m:1 nonfoodid using "`.lc_sdTemp'/fsim_nfpartition`isim'.dta", nogen assert(match) keepusing(itemred)
-				quiet: gen xnfcons_r = xnonfood if itemred
+				merge m:1 nonfoodid using "`.lc_sdTemp'/fsim_nfpartition`isim'.dta", nogen assert(match) keepusing(itemred)
+				gen xnfcons_r = xnonfood if itemred
 				collapse (sum) xnfcons_r, by(hhid train)
 				merge 1:1 hhid using "`tfood'", nogen assert(match)
 				gen red = xfcons_r + xnfcons_r
@@ -449,154 +450,154 @@ program define .mask
 				}
 				if (`isim'>1) append using "`.lc_sdTemp'/pline_llo.dta"
 				save "`.lc_sdTemp'/pline_llo.dta", replace
-			}
 
-			*START with the real dataset
-			*get household assignment to modules
-			use "`.lc_sdTemp'/HHData.dta", clear
-			keep hhid cluster weight
-			*start module assignment randomly per cluster to make sure they are uniformly across clusters
-			gen r = runiform()
-			sort cluster r
-			*get random start value for sequence for each cluster
-			by cluster: egen i = seq()
-			quiet: gen module = 1+int((`.nmodules')*runiform()) if i==1
-			quiet: bysort cluster: replace module = mod(module[_n-1],`.nmodules')+1 if i>1
-			label var module "Optional food module assigned to household"
-			*get non-food module (same as food module by definition)
-			quiet: gen module_nf = module
-			keep hhid module module_nf
-			ren module hhmod_f 
-			ren module_nf hhmod_nf
-			label var hhmod_nf "Optional non-food module assigned to household"
-			save "`.lc_sdTemp'/HH-ModuleAssignment.dta", replace
+				*START with the real dataset
+				*get household assignment to modules
+				use "`.lc_sdTemp'/HHData.dta", clear
+				keep hhid cluster weight
+				*start module assignment randomly per cluster to make sure they are uniformly across clusters
+				gen r = runiform()
+				sort cluster r
+				*get random start value for sequence for each cluster
+				by cluster: egen i = seq()
+				quiet: gen module = 1+int((`.nmodules')*runiform()) if i==1
+				quiet: bysort cluster: replace module = mod(module[_n-1],`.nmodules')+1 if i>1
+				label var module "Optional food module assigned to household"
+				*get non-food module (same as food module by definition)
+				quiet: gen module_nf = module
+				keep hhid module module_nf
+				ren module hhmod_f 
+				ren module_nf hhmod_nf
+				label var hhmod_nf "Optional non-food module assigned to household"
+				save "`.lc_sdTemp'/HH-ModuleAssignment.dta", replace
 
-			*prepare dataset for MI 
-			*FOOD CONSUMPTION
-			use "`.lc_sdTemp'/HH-Food.dta", clear
-			*get household assigned module
-			quiet: merge m:1 hhid using "`.lc_sdTemp'/HH-ModuleAssignment.dta", nogen assert(match) keepusing(hhmod_f)
-			ren hhmod_f hhmod
-			*add food assigned  module
-			quiet: merge m:1 foodid using "`.lc_sdTemp'/fsim_fpartition`isim'.dta", nogen assert(match) keepusing(itemmod itemred)
-			*get reduced food consumption
-			quiet: gen xfred = xfood if itemred
-			quiet: bysort hhid: egen xfcons_r = sum(xfred)
-			drop xfred itemred
-			*get total food consumption
-			quiet: bysort hhid: egen xfcons_t = sum(xfood)
-			*remove consumption that is not assigned
-			quiet: replace xfood = .z if (itemmod>0) & (itemmod!=hhmod)
-			*add binary yes/no indicator whether food is consumed
-			quiet: gen bfitem = xfood>0 if !missing(xfood)
-			quiet: replace bfitem = .z if xfood==.z
-			*mask consumption items with defined probability or maximum number (if not administered)
-			quiet: gen r = runiform() if ~missing(bfitem) & (bfitem==1)
-			if (`.prob'<=1) {
-				quiet: replace xfood = .y if ~missing(r) & (r>`.prob')
-			}
-			else {
-				quiet: bysort hhid: egen rk = rank(r) if ~missing(r), unique
-				quiet: replace xfood = .y if (rk>`.prob') & ~missing(r)
-				drop rk
-			}
-			drop r
-			*create module consumption
-			forvalues kmod = 0/`.nmodules' {
-				capture: bysort hhid itemmod: egen cxfood`kmod' = total(xfood) if (itemmod==`kmod') & ((`kmod'==0) | (hhmod==`kmod'))
-				quiet: bysort hhid: egen xfcons`kmod' = max(cxfood`kmod')
-				drop cxfood`kmod'
-			}
-			quiet: replace xfcons0 = 0 if missing(xfcons0)
-			*make items columns and one record per hh
-			ren xfood xfitem
-			drop itemmod
-			quiet: reshape wide xfitem bfitem, i(hhid hhmod weight) j(foodid)
-			keep hhid hhmod weight xfcons* xfitem* bfitem* 
-			order hhid hhmod weight xfcons* xfitem* bfitem*
-			*ensure assigned modules are not missing and non-assigned are missing
-			forvalues jmod = 1/`.nmodules' {
-				assert !missing(xfcons`jmod') if (hhmod==`jmod')
-				assert missing(xfcons`jmod') if (hhmod!=`jmod')
-			}
-			*check whether administered consumption is equal to module consumption
-			egen xt_items = rowtotal(xfitem*)
-			egen xt_mods = rowtotal(xfcons?)
-			assert round(xt_items-xt_mods,.1)==0
-			drop xt_*
-			save "`.lc_sdTemp'/hh-food-consumption.dta", replace
-			
-			*NON-FOOD CONSUMPTION
-			use "`.lc_sdTemp'/HH-NonFood.dta", clear
-			*get household assigned module
-			quiet: merge m:1 hhid using "`.lc_sdTemp'/HH-ModuleAssignment.dta", nogen assert(match) keepusing(hhmod_f)
-			ren hhmod_f hhmod
-			*add food assigned  module
-			quiet: merge m:1 nonfoodid using "`.lc_sdTemp'/fsim_nfpartition`isim'.dta", nogen assert(match) keepusing(itemmod itemred)
-			*get reduced food consumption
-			quiet: gen xnfred = xnonfood if itemred
-			quiet: bysort hhid: egen xnfcons_r = sum(xnfred)
-			drop xnfred itemred
-			*get total consumption
-			quiet: bysort hhid: egen xnfcons_t = sum(xnonfood)
-			*remove consumption that is not assigned
-			quiet: replace xnonfood = .z if (itemmod>0) & (itemmod!=hhmod)
-			*add binary yes/no indicator whether food is consumed (for assigned modules)
-			quiet: gen bnfitem = xnonfood>0 if !missing(xnonfood)
-			quiet: replace bnfitem = .z if xnonfood==.z
-			*mask consumption items with defined probability or maximum number (if not administered)
-			quiet: gen r = runiform() if ~missing(bnfitem) & (bnfitem==1)
-			if (`.prob'<=1) {
-				quiet: replace xnonfood = .y if ~missing(r) & (r>`.prob')
-			}
-			else {
-				quiet: bysort hhid: egen rk = rank(r) if ~missing(r), unique
-				quiet: replace xnonfood = .y if (rk>`.prob') & ~missing(r)
-				drop rk
-			}
-			drop r
-			*create module consumption
-			forvalues kmod = 0/`.nmodules' {
-				quiet: bysort hhid itemmod: egen cxnfood`kmod' = total(xnonfood) if (itemmod==`kmod') & ((`kmod'==0) | (hhmod==`kmod'))
-				quiet: bysort hhid: egen xnfcons`kmod' = max(cxnfood`kmod')
-				drop cxnfood`kmod'
-			}
-			quiet: replace xnfcons0 = 0 if missing(xnfcons0)
-			*make items columns and one record per hh
-			ren xnonfood xnfitem
-			drop itemmod
-			quiet: reshape wide xnfitem bnfitem, i(hhid hhmod weight) j(nonfoodid)
-			keep hhid hhmod weight xnfcons* xnfitem* bnfitem* 
-			order hhid hhmod weight xnfcons* xnfitem* bnfitem*
-			*ensure assigned modules are not missing and non-assigned are missing
-			forvalues jmod = 1/`.nmodules' {
-				assert !missing(xnfcons`jmod') if (hhmod==`jmod')
-				assert missing(xnfcons`jmod') if (hhmod!=`jmod')
-			}
-			*check whether administered consumption is equal to module consumption
-			egen xt_items = rowtotal(xnfitem*)
-			egen xt_mods = rowtotal(xnfcons?)
-			if (`.prob'==1) assert round(xt_items-xt_mods,.1)==0
-			drop xt_*
-			quiet: compress
-			save "`.lc_sdTemp'/hh-nonfood-consumption.dta", replace
+				*prepare dataset for MI 
+				*FOOD CONSUMPTION
+				use "`.lc_sdTemp'/HH-Food.dta", clear
+				*get household assigned module
+				quiet: merge m:1 hhid using "`.lc_sdTemp'/HH-ModuleAssignment.dta", nogen assert(match) keepusing(hhmod_f)
+				ren hhmod_f hhmod
+				*add food assigned  module
+				quiet: merge m:1 foodid using "`.lc_sdTemp'/fsim_fpartition`isim'.dta", nogen assert(match) keepusing(itemmod itemred)
+				*get reduced food consumption
+				quiet: gen xfred = xfood if itemred
+				quiet: bysort hhid: egen rfcons = sum(xfred)
+				drop xfred itemred
+				*get total food consumption
+				quiet: bysort hhid: egen cfcons = sum(xfood)
+				*remove consumption that is not assigned
+				quiet: replace xfood = .z if (itemmod>0) & (itemmod!=hhmod)
+				*add binary yes/no indicator whether food is consumed
+				quiet: gen bfitem = xfood>0 if !missing(xfood)
+				quiet: replace bfitem = .z if xfood==.z
+				*mask consumption items with defined probability or maximum number (if not administered)
+				quiet: gen r = runiform() if ~missing(bfitem) & (bfitem==1)
+				if (`.prob'<=1) {
+					quiet: replace xfood = .y if ~missing(r) & (r>`.prob')
+				}
+				else {
+					quiet: bysort hhid: egen rk = rank(r) if ~missing(r), unique
+					quiet: replace xfood = .y if (rk>`.prob') & ~missing(r)
+					drop rk
+				}
+				drop r
+				*create module consumption
+				forvalues kmod = 0/`.nmodules' {
+					capture: bysort hhid itemmod: egen cxfood`kmod' = total(xfood) if (itemmod==`kmod') & ((`kmod'==0) | (hhmod==`kmod'))
+					quiet: bysort hhid: egen xfcons`kmod' = max(cxfood`kmod')
+					drop cxfood`kmod'
+				}
+				quiet: replace xfcons0 = 0 if missing(xfcons0)
+				*make items columns and one record per hh
+				ren xfood xfitem
+				drop itemmod
+				quiet: reshape wide xfitem bfitem, i(hhid hhmod weight) j(foodid)
+				keep hhid hhmod weight cfcons rfcons xfcons* xfitem* bfitem* 
+				order hhid hhmod weight cfcons rfcons xfcons* xfitem* bfitem*
+				*ensure assigned modules are not missing and non-assigned are missing
+				forvalues jmod = 1/`.nmodules' {
+					assert !missing(xfcons`jmod') if (hhmod==`jmod')
+					assert missing(xfcons`jmod') if (hhmod!=`jmod')
+				}
+				*check whether administered consumption is equal to module consumption
+				egen xt_items = rowtotal(xfitem*)
+				egen xt_mods = rowtotal(xfcons*)
+				assert round(xt_items-xt_mods,.1)==0
+				drop xt_*
+				save "`.lc_sdTemp'/hh-food-consumption.dta", replace
+				
+				*NON-FOOD CONSUMPTION
+				use "`.lc_sdTemp'/HH-NonFood.dta", clear
+				*get household assigned module
+				quiet: merge m:1 hhid using "`.lc_sdTemp'/HH-ModuleAssignment.dta", nogen assert(match) keepusing(hhmod_f)
+				ren hhmod_f hhmod
+				*add food assigned  module
+				quiet: merge m:1 nonfoodid using "`.lc_sdTemp'/fsim_nfpartition`isim'.dta", nogen assert(match) keepusing(itemmod itemred)
+				*get reduced food consumption
+				quiet: gen xnfred = xnonfood if itemred
+				quiet: bysort hhid: egen rnfcons = sum(xnfred)
+				drop xnfred itemred
+				*get total consumption
+				quiet: bysort hhid: egen cnfcons = sum(xnonfood)
+				*remove consumption that is not assigned
+				quiet: replace xnonfood = .z if (itemmod>0) & (itemmod!=hhmod)
+				*add binary yes/no indicator whether food is consumed (for assigned modules)
+				quiet: gen bnfitem = xnonfood>0 if !missing(xnonfood)
+				quiet: replace bnfitem = .z if xnonfood==.z
+				*mask consumption items with defined probability or maximum number (if not administered)
+				quiet: gen r = runiform() if ~missing(bnfitem) & (bnfitem==1)
+				if (`.prob'<=1) {
+					quiet: replace xnonfood = .y if ~missing(r) & (r>`.prob')
+				}
+				else {
+					quiet: bysort hhid: egen rk = rank(r) if ~missing(r), unique
+					quiet: replace xnonfood = .y if (rk>`.prob') & ~missing(r)
+					drop rk
+				}
+				drop r
+				*create module consumption
+				forvalues kmod = 0/`.nmodules' {
+					quiet: bysort hhid itemmod: egen cxnfood`kmod' = total(xnonfood) if (itemmod==`kmod') & ((`kmod'==0) | (hhmod==`kmod'))
+					quiet: bysort hhid: egen xnfcons`kmod' = max(cxnfood`kmod')
+					drop cxnfood`kmod'
+				}
+				quiet: replace xnfcons0 = 0 if missing(xnfcons0)
+				*make items columns and one record per hh
+				ren xnonfood xnfitem
+				drop itemmod
+				quiet: reshape wide xnfitem bnfitem, i(hhid hhmod weight) j(nonfoodid)
+				keep hhid hhmod weight cnfcons rnfcons xnfcons* xnfitem* bnfitem* 
+				order hhid hhmod weight cnfcons rnfcons xnfcons* xnfitem* bnfitem*
+				*ensure assigned modules are not missing and non-assigned are missing
+				forvalues jmod = 1/`.nmodules' {
+					assert !missing(xnfcons`jmod') if (hhmod==`jmod')
+					assert missing(xnfcons`jmod') if (hhmod!=`jmod')
+				}
+				*check whether administered consumption is equal to module consumption
+				egen xt_items = rowtotal(xnfitem*)
+				egen xt_mods = rowtotal(xnfcons*)
+				if (`.prob'==1) assert round(xt_items-xt_mods,.1)==0
+				drop xt_*
+				quiet: compress
+				save "`.lc_sdTemp'/hh-nonfood-consumption.dta", replace
 
-			*merge food and non-food
-			use "`.lc_sdTemp'/HHData.dta", clear
-			drop xfood* xnonfood*
-			quiet: merge 1:1 hhid using "`.lc_sdTemp'/hh-food-consumption.dta", nogen assert(master match)
-			quiet: merge 1:1 hhid using "`.lc_sdTemp'/hh-nonfood-consumption.dta", nogen assert(master match)
-			order xfcons* xnfcons* xf* bf* xnf* bnf*, last
-			ren (x*cons_t x*cons_r) (c*cons r*cons)
-			*create percentiles
-			foreach v of varlist xfcons0 xnfcons0 xdurables {
-				xtile p`v' = `v' [pweight=weight], nquantiles(4)
+				*merge food and non-food
+				use "`.lc_sdTemp'/HHData.dta", clear
+				drop xfood* xnonfood*
+				quiet: merge 1:1 hhid using "`.lc_sdTemp'/hh-food-consumption.dta", nogen assert(master match)
+				quiet: merge 1:1 hhid using "`.lc_sdTemp'/hh-nonfood-consumption.dta", nogen assert(master match)
+				order cfcons rfcons xfcons* cnfcons rnfcons xnfcons* xf* bf* xnf* bnf*, last
+				*create percentiles
+				foreach v of varlist xfcons0 xnfcons0 xdurables {
+					xtile p`v' = `v' [pweight=weight], nquantiles(4)
+				}
+				*prepare check variables
+				quiet: gen ccons = cfcons + cnfcons + xdurables
+				quiet: gen rcons = rfcons + rnfcons + xdurables
+				quiet: compress
+				save "`.lc_sdTemp'/mi_`isim'.dta", replace
+
 			}
-			*prepare check variables
-			quiet: gen ccons = cfcons + cnfcons + xdurables
-			quiet: gen rcons = rfcons + rnfcons + xdurables
-			quiet: compress
-			save "`.lc_sdTemp'/mi_`isim'.dta", replace
 		}
 	}
 	.status = 2
@@ -846,7 +847,7 @@ program define .analyze
 	quiet merge 1:1 simulation using "`.lc_sdTemp'/pline_llo.dta", nogen assert(match)
 	save "`.lc_sdTemp'/pline.dta", replace
 	*calculate FGTs and gini for list of poverty lines
-	di "  Calculating FGT and Gini: " _newline "  " _continue
+	di "  Calculating FGT and Gini: " _newline "    " _continue
 	foreach v of local lrefredmeth {
 		di "`v' " _continue
 		capture: confirm file "`.lc_sdTemp'/simd_`v'_stats.dta"
@@ -886,7 +887,7 @@ program define .analyze
 		}
 	}
 	*get performance statistics
-	di "  Calculating performance indicators..."
+	di _n "  Calculating performance indicators..."
 	quiet foreach sm of local lredmeth {
 		capture: confirm file "`.lc_sdTemp'/simd_`sm'_pstats.dta"
 		if ((_rc>0) | ("`force'"!="")) {
