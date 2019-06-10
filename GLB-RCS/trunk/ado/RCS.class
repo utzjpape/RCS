@@ -817,6 +817,7 @@ program define .analyze
 	*prepare datasets also for ref and red
 	quiet {
 		use "`.lc_sdTemp'/simd_`: word 1 of `.lmethod''_imp.dta", clear
+		keep if imputation==1
 		drop est
 		ren ref est
 		save "`.lc_sdTemp'/simd_ref_imp.dta", replace
@@ -849,37 +850,39 @@ program define .analyze
 	foreach v of local lrefredmeth {
 		di "`v' " _continue
 		capture: confirm file "`.lc_sdTemp'/simd_`v'_stats.dta"
-		quiet if ((_rc>0) | ("`force'"!="")) {
-			*allow different poverty lines
-			local pline = "pline"
-			if "`v'"=="llo" local pline = "pline_llo"
-			*prepare dataset
-			use "`.lc_sdTemp'/simd_`v'_imp.dta", clear
-			quiet: drop `sdrop'
-			quiet: merge m:1 hhid using "`.lc_sdTemp'/HHData.dta", assert(using match) keep(match) keepusing(hhsize) nogen
-			quiet summ imputation
-			local b = 10^ceil(log10(r(max)))
-			quiet: replace hhid = hhid * `b' + imputation
-			drop imputation
-			*add plines
-			merge m:1 simulation using "`.lc_sdTemp'/pline.dta", nogen assert(match) keepusing("`pline'*")
-			*calculate FGT and gini
-			sort simulation est
-			quiet: by simulation: egen i = seq() if ~missing(est)
-			quiet: by simulation: egen n = max(i) if ~missing(est)
-			quiet: gen x_gini = (n + 1 - i) * est  if ~missing(est)
-			drop i n
-			quiet forvalues i = 1/100 {
-				gen x_fgt0_i`i' = est < `pline'`i'  if ~missing(est)
-				gen x_fgt1_i`i' = max(`pline'`i' - est,0) / `pline'`i' if ~missing(est)
-				gen x_fgt2_i`i' = x_fgt1_i`i'^2 if ~missing(est)
+		if ((_rc>0) | ("`force'"!="")) {
+			quiet {
+				*allow different poverty lines
+				local pline = "pline"
+				if "`v'"=="llo" local pline = "pline_llo"
+				*prepare dataset
+				use "`.lc_sdTemp'/simd_`v'_imp.dta", clear
+				quiet: drop `sdrop'
+				quiet: merge m:1 hhid using "`.lc_sdTemp'/HHData.dta", assert(using match) keep(match) keepusing(hhsize) nogen
+				quiet summ imputation
+				local b = 10^ceil(log10(r(max)))
+				quiet: replace hhid = hhid * `b' + imputation
+				drop imputation
+				*add plines
+				merge m:1 simulation using "`.lc_sdTemp'/pline.dta", nogen assert(match) keepusing("`pline'*")
+				*calculate FGT and gini
+				sort simulation est
+				quiet: by simulation: egen i = seq() if ~missing(est)
+				quiet: by simulation: egen n = max(i) if ~missing(est)
+				quiet: gen x_gini = (n + 1 - i) * est  if ~missing(est)
+				drop i n
+				quiet forvalues i = 1/100 {
+					gen x_fgt0_i`i' = est < `pline'`i'  if ~missing(est)
+					gen x_fgt1_i`i' = max(`pline'`i' - est,0) / `pline'`i' if ~missing(est)
+					gen x_fgt2_i`i' = x_fgt1_i`i'^2 if ~missing(est)
+				}
+				collapse (mean) x_* est (count) n=hhid [pweight=weight*hhsize], by(simulation)
+				*finalize gini
+				quiet: replace x_gini = (n+1-2*x_gini / est) / n
+				drop est n
+				save "`.lc_sdTemp'/simd_`v'_stats.dta", replace
+				capture: erase "`.lc_sdTemp'/simd_`v'_pstats.dta"
 			}
-			collapse (mean) x_* est (count) n=hhid [pweight=weight*hhsize], by(simulation)
-			*finalize gini
-			quiet: replace x_gini = (n+1-2*x_gini / est) / n
-			drop est n
-			save "`.lc_sdTemp'/simd_`v'_stats.dta", replace
-			capture: erase "`.lc_sdTemp'/simd_`v'_pstats.dta"
 		}
 	}
 	*get performance statistics
