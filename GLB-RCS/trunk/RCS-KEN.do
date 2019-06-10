@@ -21,9 +21,9 @@ if _rc != 0 {
 local train = 1
 capture classutil drop .r
 .r = .RCS.new
-.r.prepare using "`using`train''", dirbase("${gsdOutput}/KEN-KIHBS-test") nmodules(12) ncoref(0) ncorenf(0) nsim(2) train(`train') erase
+.r.prepare using "`using`train''", dirbase("${gsdOutput}/KEN-KIHBS-test") nmodules(20) ncoref(0) ncorenf(0) nsim(2) train(`train') erase
 .r.mask
-.r.estimate , lmethod("avg") nmi(5)
+.r.estimate , lmethod("mi_2cel") nmi(5)
 .r.collate
 .r.analyze
 
