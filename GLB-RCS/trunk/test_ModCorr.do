@@ -22,8 +22,9 @@ forvalues i = 0/`nm' {
 collapse (sum) cc*, by(hhid)
 *get average correlation
 corr cc*
+matrix C = r(C)
 mata
-	C = st_matrix("r(C)")
+	C = st_matrix("C")
 	C[1,1]=.
 	st_local("cmean",strofreal(mean(abs(C[,1]))))
 end
@@ -87,14 +88,56 @@ mi update
 mi rename z icons
 mi reshape wide icons, i(hhid) j(imod)
 mi ren fcore icons0
-tempfile fh_est
-save "`fh_est'", replace
+save "${gsdTemp}/test.dta", replace
 
 *test results
-use "`fh_est'", clear
+use "${gsdTemp}/test.dta", clear
 egen cc = rowtotal(cc*)
 mi passive: egen ic = rowtotal(icons*)
-mi passive: gen zc = ic + rnormal(0, `cmean'^1.5)
+corr cc0 cc1 cc2 cc3 cc4 cc5
+matrix C=r(C)
+*Module correlation correction
+forvalues j=1/5 {
+	egen micons`j' = rowmean(_?_icons`j')
+}
+forvalues i=1/10 {
+*	corr icons0 _`i'_icons*
+	drawnorm y0 y1 y2 y3 y4 y5, cov(C)
+*	corr y*
+	quiet: replace icons0 = icons0 + y0/10
+	*add to MI estimates
+	forvalues j=1/5 {
+		quiet: replace _`i'_icons`j' = micons`j' + y`j'
+	}
+	drop y*
+*	corr icons0 _`i'_icons*
+}
+mi passive: egen zc = rowtotal(icons*)
+
+*cdfplots
+preserve
+ren cc z0
+forvalues i=1/10 {
+	ren _`i'_ic z1_`i'
+	ren _`i'_zc z2_`i'
+}
+mi unset
+keep hhid z0 z1_* z2_*
+reshape long z1_ z2_, i(hhid) j(mi)
+ren z?_ z?
+reshape long z, i(hhid mi) j(i)
+cdfplot z, by(i)
+cdfplot z if mi==1, by(i)
+*transform
+bysort i: egen xsd = sd(z)
+gen xxsd= xsd[1]
+bysort i: egen xm= mean(z)
+gen zz = (z-xm)/xsd*xxsd + xm
+cdfplot zz, by(i)
+
+
+
+restore
 * calculate FGT for all possible poverty lines
 _pctile cc, nq(100)
 quiet forvalues i = 1/100 {
