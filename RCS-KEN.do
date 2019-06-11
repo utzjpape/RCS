@@ -82,15 +82,17 @@ forvalues t = 0/1 {
 
 
 *collect results
-forvalues t = 0/1 {
+*forvalues t = 0/1 {
+local t = 1
 	clear
 	foreach kc of local lc {
 		foreach km of local lm {
-			append using "${gsdOutput}/KEN-KIHBS-c`kc'-m`km'-t`t'.dta"
+			cap: append using "${gsdOutput}/KEN-KIHBS-c`kc'-m`km'-t`t'.dta"
+			if _rc==601 di "File ${gsdOutput}/KEN-KIHBS-c`kc'-m`km'-t`t'.dta does not exist."
 		}
 	}
 	save "${gsdOutput}/KEN-KIHBS-t`t'.dta", replace
-}
+*}
 
 	
 *analysis without training set
@@ -114,7 +116,7 @@ forvalues i=0/2 {
 		twoway (scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
 			(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
 			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(eltblue)) ///
-			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(ebblue)), title("FGT`i'", size(normal)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "Reduced" 4 "Reduced (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
+			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(ebblue)), title("FGT`i'", size(medium)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "Reduced" 4 "Reduced (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
 		local sg = "`sg' `g'"
 	}
 }
@@ -123,10 +125,9 @@ graph drop `sg'
 graph export "${gsdOutput}/RCS-Red.png", replace
 
 *analysis with LLO
-use "${gsdOutput}/KEN-KIHBS-c0-m2-t1.dta", clear
-append using "${gsdOutput}/KEN-KIHBS-c1-m2-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m4-t1.dta" "${gsdOutput}/KEN-KIHBS-c1-m4-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m6-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m8-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m10-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m30-t1.dta"
+use "${gsdOutput}/KEN-KIHBS-t1.dta", clear
 replace p = abs(p) if metric == "bias"
-collapse (max) p (mean) rpq_red rpq_rcs, by(method indicator metric kc km)
+collapse (mean) p (mean) rpq_red rpq_rcs, by(method indicator metric kc km)
 local sg = ""
 local lm = "bias cv"
 forvalues i=0/2 {
@@ -136,7 +137,7 @@ forvalues i=0/2 {
 		twoway (scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
 			(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
 			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(eltgreen)) ///
-			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(emerald)), title("FGT`i'", size(normal)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "LLO" 4 "LLO (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
+			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(emerald)), title("FGT`i'", size(medium)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "LLO" 4 "LLO (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
 		local sg = "`sg' `g'"
 	}
 }
