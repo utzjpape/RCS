@@ -28,48 +28,61 @@ capture classutil drop .r
 .r.analyze
 
 *start RCS code
-*number of simulations (should be 20)
-local nsim = 5
-*number of imputations (should be 50)
-local nmi = 50
-*methods
-local lmethod = "med avg reg tobit mi_reg mi_2cel"
-local lc = "0 1 3 5 10 20 50"
-local lm = "2 4 6 8 10 15 20"
+cap: prog drop callRCS
+program define callRCS
+	syntax , t(integer) kc(integer) km(integer)
+	*number of simulations (should be 20)
+	local nsim = 5
+	*number of imputations (should be 50)
+	local nmi = 50
+	*methods
+	local lmethod = "med avg reg tobit mi_reg mi_2cel"
+	local dirbase = "${gsdOutput}/KEN-KIHBS-c`kc'-m`km'-t`t'"
+	*create instance to run RCS simulations
+	capture classutil drop .r
+	.r = .RCS.new
+	.r.prepare using "`using`t''", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim') train(`t')
+	.r.mask
+	if (((`kc'==0) | (`km'==2)) & (`t'==0) & (`km'<=10)) .r.estimate , lmethod("`lmethod'") nmi(`nmi')
+	else if (`km'>12) .r.estimate , lmethod("avg") nmi(`nmi')
+	else .r.estimate , lmethod("mi_2cel") nmi(`nmi')
+	.r.collate
+	.r.analyze
+	gen kc = `kc'
+	label var kc "Parameter: number of core items"
+	gen km = `km'
+	label var km "Parameter: number of modules"
+	gen t = `t'
+	label var t "Used training set"
+	save "`dirbase'.dta", replace
+end
 
+*iterations
+global lc = "0 1 3 5 10 20 50"
+global lm = "2 4 6 8 10 12 15 20 25 30 40 50"
 *run for best method over different number of modules and core
 forvalues t = 0/1 {
 	*determine whether we use a 2005 for training and run imputations on 2015
-	foreach kc of local lc {
-		foreach km of local lm {
-			local dirbase = "${gsdOutput}/KEN-KIHBS-c`kc'-m`km'-t`t'"
-			*create instance to run RCS simulations
-			capture classutil drop .r
-			.r = .RCS.new
-			.r.prepare using "`using`t''", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim') train(`t')
-			.r.mask
-			if (((`kc'==0) | (`km'==2)) & `t'==0) .r.estimate , lmethod("`lmethod'") nmi(`nmi')
-			else .r.estimate , lmethod("mi_2cel") nmi(`nmi')
-			.r.collate
-			.r.analyze
-			gen kc = `kc'
-			label var kc "Parameter: number of core items"
-			gen km = `km'
-			label var km "Parameter: number of modules"
-			gen t = `t'
-			label var t "Used training set"
-			save "`dirbase'.dta", replace
+	foreach kc of global lc {
+		foreach km of global lm {
+			callRCS ,t(`t') kc(`kc') km(`km')
 		}
 	}
+}
+
+
+*collect results
+forvalues t = 0/1 {
 	clear
-	foreach kc of local lc {
-		foreach km of local lm {
+	foreach kc of global lc {
+		foreach km of global lm {
 			append using "${gsdOutput}/KEN-KIHBS-c`kc'-m`km'-t`t'.dta"
 		}
 	}
 	save "${gsdOutput}/KEN-KIHBS-t`t'.dta", replace
 }
 
+	
 *analysis without training set
 use "${gsdOutput}/KEN-KIHBS-t0.dta", clear
 replace p = abs(p) if metric == "bias"
@@ -88,10 +101,10 @@ forvalues i=0/2 {
 	foreach m of local lm {
 		local g = "g`i'_`m'"
 		cap graph drop `g'
-		twoway (scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel") ///
-			(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel") ///
-			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red") ///
-			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red"), title("FGT`i'", size(normal)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "Reduced" 4 "Reduced (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
+		twoway (scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
+			(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
+			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(eltblue)) ///
+			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(ebblue)), title("FGT`i'", size(normal)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "Reduced" 4 "Reduced (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
 		local sg = "`sg' `g'"
 	}
 }
@@ -99,8 +112,9 @@ grc1leg `sg', graphregion(fcolor(white)) col(2)
 graph drop `sg'
 graph export "${gsdOutput}/RCS-Red.png", replace
 
-*analysis with training set
-use "${gsdOutput}/KEN-KIHBS-t1.dta", clear
+*analysis with LLO
+use "${gsdOutput}/KEN-KIHBS-c0-m2-t1.dta", clear
+append using "${gsdOutput}/KEN-KIHBS-c0-m4-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m6-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m8-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m10-t1.dta"
 replace p = abs(p) if metric == "bias"
 collapse (mean) p rpq_red rpq_rcs, by(method indicator metric kc km)
 local sg = ""
@@ -109,15 +123,15 @@ forvalues i=0/2 {
 	foreach m of local lm {
 		local g = "g`i'_`m'"
 		cap graph drop `g'
-		twoway (scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel") ///
-			(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel") ///
-			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red") ///
-			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red") ///
-			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo") ///
-			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo"), title("FGT`i'", size(normal)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "Reduced" 4 "Reduced (fitted)" 5 "LLO" 6 "LLO (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
+		twoway (scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
+			(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
+			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(eltblue)) ///
+			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(ebblue)) ///
+			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(eltgreen)) ///
+			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(emerald)), title("FGT`i'", size(normal)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "Reduced" 4 "Reduced (fitted)" 5 "LLO" 6 "LLO (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
 		local sg = "`sg' `g'"
 	}
 }
 grc1leg `sg', graphregion(fcolor(white)) col(2)
 graph drop `sg'
-graph export "${gsdOutput}/RCS-Red.png", replace
+graph export "${gsdOutput}/RCS-LLO.png", replace
