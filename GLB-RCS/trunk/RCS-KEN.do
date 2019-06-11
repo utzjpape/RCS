@@ -21,9 +21,9 @@ if _rc != 0 {
 local train = 1
 capture classutil drop .r
 .r = .RCS.new
-.r.prepare using "`using`train''", dirbase("${gsdOutput}/KEN-KIHBS-test") nmodules(20) ncoref(0) ncorenf(0) nsim(2) train(`train') erase
+.r.prepare using "`using`train''", dirbase("${gsdOutput}/KEN-KIHBS-test") nmodules(20) ncoref(0) ncorenf(0) nsim(2) train(`train')
 .r.mask
-.r.estimate , lmethod("mi_2cel") nmi(5)
+.r.estimate , lmethod("avg") nmi(5)
 .r.collate
 .r.analyze
 
@@ -35,7 +35,7 @@ local nmi = 50
 *methods
 local lmethod = "med avg reg tobit mi_reg mi_2cel"
 local lc = "0 1 3 5 10 20 50"
-local lm = "2 4 6 9"
+local lm = "2 4 6 8 10 15 20"
 
 *run for best method over different number of modules and core
 forvalues t = 0/1 {
@@ -58,14 +58,13 @@ forvalues t = 0/1 {
 			label var km "Parameter: number of modules"
 			gen t = `t'
 			label var t "Used training set"
-			tempfile fh`kc'_`km'_`t'
-			save "`fh`kc'_`km'_`t''", replace
+			save "`dirbase'.dta", replace
 		}
 	}
 	clear
 	foreach kc of local lc {
 		foreach km of local lm {
-			append using "`fh`kc'_`km'_`t''"
+			append using "${gsdOutput}/KEN-KIHBS-c`kc'-m`km'-t`t'.dta"
 		}
 	}
 	save "${gsdOutput}/KEN-KIHBS-t`t'.dta", replace
