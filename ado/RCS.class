@@ -866,7 +866,7 @@ program define .analyze
 				local pline = "pline"
 				if "`v'"=="llo" {
 					local pline = "pline_llo"
-					merge m:1 simulation using "`.lc_sdTemp'/`pline'.dta", nogen assert(match) keepusing("`pline'*")
+					merge m:1 simulation using "`.lc_sdTemp'/`pline'.dta", nogen assert(match using) keep(match) keepusing("`pline'*")
 				}
 				*calculate FGT and gini
 				sort simulation est
