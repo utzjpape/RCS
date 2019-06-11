@@ -30,7 +30,7 @@ capture classutil drop .r
 *start RCS code
 cap: prog drop callRCS
 program define callRCS
-	syntax , t(integer) kc(integer) km(integer)
+	syntax using/, t(integer) kc(integer) km(integer)
 	*number of simulations (should be 20)
 	local nsim = 5
 	*number of imputations (should be 50)
@@ -41,7 +41,7 @@ program define callRCS
 	*create instance to run RCS simulations
 	capture classutil drop .r
 	.r = .RCS.new
-	.r.prepare using "`using`t''", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim') train(`t')
+	.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim') train(`t')
 	.r.mask
 	if (((`kc'==0) | (`km'==2)) & (`t'==0) & (`km'<=10)) .r.estimate , lmethod("`lmethod'") nmi(`nmi')
 	else if (`km'>12) .r.estimate , lmethod("avg") nmi(`nmi')
@@ -65,7 +65,7 @@ forvalues t = 0/1 {
 	*determine whether we use a 2005 for training and run imputations on 2015
 	foreach kc of global lc {
 		foreach km of global lm {
-			callRCS ,t(`t') kc(`kc') km(`km')
+			callRCS using "`using`t''",t(`t') kc(`kc') km(`km')
 		}
 	}
 }
