@@ -842,13 +842,11 @@ program define .analyze
 	*obtain poverty lines
 	_pctile ref if simulation==1 & imputation==1 [pweight=weight*hhsize], nq(100)
 	quiet forvalues i = 1/100 {
-		gen pline`i' = r(r`i')
+		*use local macro for reference pline
+		local pline`i' = r(r`i')
+		*use merged variable for LLO poverty lines (variable across simulations if random core)
+		local pline_llo`i' = "pline_llo`i'"
 	}
-	*create one record per simulation to add plines
-	collapse (firstnm) pline*, by(simulation)
-	*add poverty lines for LLO 2011
-	quiet merge 1:1 simulation using "`.lc_sdTemp'/pline_llo.dta", nogen assert(match)
-	save "`.lc_sdTemp'/pline.dta", replace
 	*calculate FGTs and gini for list of poverty lines
 	di "  Calculating FGT and Gini: " _newline "    " _continue
 	foreach v of local lrefredmeth {
@@ -856,9 +854,6 @@ program define .analyze
 		capture: confirm file "`.lc_sdTemp'/simd_`v'_stats.dta"
 		if ((_rc>0) | ("`force'"!="")) {
 			quiet {
-				*allow different poverty lines
-				local pline = "pline"
-				if "`v'"=="llo" local pline = "pline_llo"
 				*prepare dataset
 				use "`.lc_sdTemp'/simd_`v'_imp.dta", clear
 				quiet: drop `sdrop'
@@ -867,8 +862,12 @@ program define .analyze
 				local b = 10^ceil(log10(r(max)))
 				quiet: replace hhid = hhid * `b' + imputation
 				drop imputation
-				*add plines
-				merge m:1 simulation using "`.lc_sdTemp'/pline.dta", nogen assert(match) keepusing("`pline'*")
+				*allow different poverty lines
+				local pline = "pline"
+				if "`v'"=="llo" {
+					local pline = "pline_llo"
+					merge m:1 simulation using "`.lc_sdTemp'/`pline'.dta", nogen assert(match) keepusing("`pline'*")
+				}
 				*calculate FGT and gini
 				sort simulation est
 				quiet: by simulation: egen i = seq() if ~missing(est)
@@ -876,8 +875,8 @@ program define .analyze
 				quiet: gen x_gini = (n + 1 - i) * est  if ~missing(est)
 				drop i n
 				quiet forvalues i = 1/100 {
-					gen x_fgt0_i`i' = est < `pline'`i'  if ~missing(est)
-					gen x_fgt1_i`i' = max(`pline'`i' - est,0) / `pline'`i' if ~missing(est)
+					gen x_fgt0_i`i' = est < ``pline'`i''  if ~missing(est)
+					gen x_fgt1_i`i' = max(``pline'`i'' - est,0) / ``pline'`i'' if ~missing(est)
 					gen x_fgt2_i`i' = x_fgt1_i`i'^2 if ~missing(est)
 				}
 				collapse (mean) x_* est (count) n=hhid [pweight=weight*hhsize], by(simulation)
