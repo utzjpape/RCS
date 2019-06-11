@@ -41,11 +41,21 @@ program define callRCS
 	*create instance to run RCS simulations
 	capture classutil drop .r
 	.r = .RCS.new
-	.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim') train(`t')
-	.r.mask
-	if (((`kc'==0) | (`km'==2)) & (`t'==0) & (`km'<=10)) .r.estimate , lmethod("`lmethod'") nmi(`nmi')
-	else if (`km'>12) .r.estimate , lmethod("avg") nmi(`nmi')
-	else .r.estimate , lmethod("mi_2cel") nmi(`nmi')
+	if (((`kc'==0) | (`km'==2)) & (`t'==0) & (`km'<=10)) {
+		.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim') train(`t')
+		.r.mask
+		.r.estimate , lmethod("`lmethod'") nmi(`nmi')
+	}
+	else if (`km'>10) {
+		.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(1) train(`t')
+		.r.mask
+		.r.estimate , lmethod("avg") nmi(1)
+	}
+	else {
+		.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim') train(`t')
+		.r.mask
+		.r.estimate , lmethod("mi_2cel") nmi(`nmi')
+	}
 	.r.collate
 	.r.analyze
 	gen kc = `kc'
@@ -58,13 +68,13 @@ program define callRCS
 end
 
 *iterations
-global lc = "0 1 3 5 10 20 50"
-global lm = "2 4 6 8 10 12 15 20 25 30 40 50"
+local lc = "0 1 3 5 10 20 50"
+local lm = "2 4 6 8 10 12 15 20 25 30 40 50"
 *run for best method over different number of modules and core
 forvalues t = 0/1 {
 	*determine whether we use a 2005 for training and run imputations on 2015
-	foreach kc of global lc {
-		foreach km of global lm {
+	foreach kc of local lc {
+		foreach km of local lm {
 			callRCS using "`using`t''",t(`t') kc(`kc') km(`km')
 		}
 	}
@@ -74,8 +84,8 @@ forvalues t = 0/1 {
 *collect results
 forvalues t = 0/1 {
 	clear
-	foreach kc of global lc {
-		foreach km of global lm {
+	foreach kc of local lc {
+		foreach km of local lm {
 			append using "${gsdOutput}/KEN-KIHBS-c`kc'-m`km'-t`t'.dta"
 		}
 	}
@@ -114,9 +124,9 @@ graph export "${gsdOutput}/RCS-Red.png", replace
 
 *analysis with LLO
 use "${gsdOutput}/KEN-KIHBS-c0-m2-t1.dta", clear
-append using "${gsdOutput}/KEN-KIHBS-c0-m4-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m6-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m8-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m10-t1.dta"
+append using "${gsdOutput}/KEN-KIHBS-c1-m2-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m4-t1.dta" "${gsdOutput}/KEN-KIHBS-c1-m4-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m6-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m8-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m10-t1.dta" "${gsdOutput}/KEN-KIHBS-c0-m30-t1.dta"
 replace p = abs(p) if metric == "bias"
-collapse (mean) p rpq_red rpq_rcs, by(method indicator metric kc km)
+collapse (max) p (mean) rpq_red rpq_rcs, by(method indicator metric kc km)
 local sg = ""
 local lm = "bias cv"
 forvalues i=0/2 {
@@ -125,10 +135,8 @@ forvalues i=0/2 {
 		cap graph drop `g'
 		twoway (scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
 			(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
-			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(eltblue)) ///
-			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(ebblue)) ///
 			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(eltgreen)) ///
-			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(emerald)), title("FGT`i'", size(normal)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "Reduced" 4 "Reduced (fitted)" 5 "LLO" 6 "LLO (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
+			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(emerald)), title("FGT`i'", size(normal)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "LLO" 4 "LLO (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
 		local sg = "`sg' `g'"
 	}
 }
