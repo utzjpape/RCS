@@ -69,7 +69,7 @@ end
 
 *iterations
 local lc = "0 1 3 5 10 20 50"
-local lm = "2 4 6 8 10 12 15 20 25 30 40 50"
+local lm = "2 4 6 8 10 12 15 20"
 *run for best method over different number of modules and core
 forvalues t = 0/1 {
 	*determine whether we use a 2005 for training and run imputations on 2015
@@ -94,7 +94,10 @@ local t = 1
 	save "${gsdOutput}/KEN-KIHBS-t`t'.dta", replace
 *}
 
-	
+
+************************************************
+* COMPARISON OF METHODS
+************************************************
 *analysis without training set
 use "${gsdOutput}/KEN-KIHBS-t0.dta", clear
 replace p = abs(p) if metric == "bias"
@@ -106,41 +109,77 @@ table method metric kc if !inlist(method,"llo","red") & indicator=="fgt2" & inli
 table km metric kc if method=="mi_2cel" & inlist(indicator,"fgt0","fgt1","fgt2") & inlist(metric,"bias"), by(indicator) c(mean p) format(%9.3f)
 table km metric kc if method=="mi_2cel" & inlist(indicator,"fgt0","fgt1","fgt2") & inlist(metric,"cv"), by(indicator) c(mean p) format(%9.3f)
 
-collapse (mean) p rpq_red rpq_rcs, by(method indicator metric kc km)
+************************************************
+* COMPARISON WITH REDUCED
+************************************************
+collapse (mean) p (max) max_p=p (mean) rpq_red rpq_rcs, by(method indicator metric kc km)
 local sg = ""
 local lm = "bias cv"
 forvalues i=0/2 {
-	foreach m of local lm {
-		local g = "g`i'_`m'"
-		cap graph drop `g'
-		twoway (scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
-			(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
-			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(eltblue)) ///
-			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(ebblue)), title("FGT`i'", size(medium)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "Reduced" 4 "Reduced (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
-		local sg = "`sg' `g'"
-	}
+	*plot for bias
+	local m = "bias"
+	local g = "g`i'_`m'"
+	twoway ///
+		(scatter max_p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel",  msize(vsmall) color(erose)) ///
+		(qfit max_p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
+		(scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel",  msize(vsmall) color(maroon)) ///
+		(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
+		(scatter max_p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red",  msize(vsmall) color(eltgreen)) ///
+		(qfit max_p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(eltgreen)) ///
+		(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red",  msize(vsmall) color(emerald)) ///
+		(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(emerald)) ///
+		, title("FGT`i'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of Asked Questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(1 "Rapid (avg)" 2 "Rapid (avg; fitted)" 3 "Rapid (max)" 4 "Rapid (max; fitted)" 5 "Reduced (avg)" 6 "Reduced (avg; fitted)" 7 "Reduced (max)" 8 "Reduced (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
+	local sg = "`sg' `g'"
+	*plot for cv
+	local m = "cv"
+	local g = "g`i'_`m'"
+	twoway ///
+		(scatter max_p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel",  msize(vsmall) color(erose)) ///
+		(qfit max_p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
+		(scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel",  msize(vsmall) color(maroon)) ///
+		(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
+		, title("FGT`i'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of Asked Questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(1 "Rapid (avg)" 2 "Rapid (avg; fitted)" 3 "Rapid (max)" 4 "Rapid (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
+	local sg = "`sg' `g'"
 }
-grc1leg `sg', graphregion(fcolor(white)) col(2)
+grc1leg `sg', imargin(b=0 t=0) graphregion(fcolor(white)) col(2) name(gfgt`i', replace) 
+graph export "${gsdOutput}/RCS-red_fgt`i'.png", replace
 graph drop `sg'
-graph export "${gsdOutput}/RCS-Red.png", replace
+local sg = ""
 
+************************************************
+* COMPARISON WITH LLO
+************************************************
 *analysis with LLO
 use "${gsdOutput}/KEN-KIHBS-t1.dta", clear
-replace p = abs(p) if metric == "bias"
-collapse (mean) p (mean) rpq_red rpq_rcs, by(method indicator metric kc km)
-local sg = ""
-local lm = "bias cv"
+replace p = abs(p) if inlist(metric,"bias")
+collapse (mean) p (max) max_p=p (mean) rpq_red rpq_rcs, by(method indicator metric kc km)
 forvalues i=0/2 {
-	foreach m of local lm {
-		local g = "g`i'_`m'"
-		cap graph drop `g'
-		twoway (scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
-			(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
-			(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(eltgreen)) ///
-			(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(emerald)), title("FGT`i'", size(medium)) ytitle("`m'") xtitle("Proportion of Asked Questions") ylabel(,angle(0)) legend(order(1 "RCS" 2 "RCS (fitted)" 3 "LLO" 4 "LLO (fitted)") size(vsmall)) graphregion(fcolor(white)) bgcolor(white) name(`g')
-		local sg = "`sg' `g'"
-	}
+	*plot for bias
+	local m = "bias"
+	local g = "g`i'_`m'"
+	twoway ///
+		(scatter max_p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", msize(vsmall) color(erose)) ///
+		(qfit max_p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
+		(scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", msize(vsmall) color(maroon)) ///
+		(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
+		(scatter max_p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", msize(vsmall) color(eltgreen)) ///
+		(qfit max_p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(eltgreen)) ///
+		(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", msize(vsmall) color(emerald)) ///
+		(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(emerald)) ///
+		, title("FGT`i'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of Asked Questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(1 "Rapid (avg)" 2 "RCS (avg; fitted)" 3 "Rapid (max)" 4 "Rapid (max; fitted)" 5 "LLO (avg)" 6 "LLO (avg; fitted)" 7 "LLO (max)" 8 "LLO (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
+	local sg = "`sg' `g'"
+	*plot for cv
+	local m = "cv"
+	local g = "g`i'_`m'"
+	twoway ///
+		(scatter max_p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel",  msize(vsmall) color(erose)) ///
+		(qfit max_p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
+		(scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel",  msize(vsmall) color(maroon)) ///
+		(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
+		, title("FGT`i'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of Asked Questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(1 "Rapid (avg)" 2 "RCS (avg; fitted)" 3 "Rapid (max)" 4 "Rapid (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
+	local sg = "`sg' `g'"
 }
-grc1leg `sg', graphregion(fcolor(white)) col(2)
+grc1leg `sg', imargin(b=0 t=0) graphregion(fcolor(white)) col(2) name(gfgt`i', replace)
+graph export "${gsdOutput}/RCS-LLO_fgt`i'.png", replace
 graph drop `sg'
-graph export "${gsdOutput}/RCS-LLO.png", replace
+local sg = ""
