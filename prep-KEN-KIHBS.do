@@ -7,13 +7,45 @@ set more off
 *data directory
 local sData = "${gsdDataBox}/KEN-KIHBS"
 
+*adjust capi pilot for smaller core
+use "`sData'/fcons-unified.dta", clear
+merge m:1 survey clid hhid using "`sData'/hh-unified.dta", nogen assert(match) keep(match) keepusing(hhmod)
+*reduce number of core items to become more realistic
+sort itemid
+replace mod_item = -1 if mod_item==0 & !inlist(itemid,801,1101,103,105,301) & (survey==3)
+egen xx = group(itemid) if mod_item==-1 & (survey==3)
+replace mod_item = mod(xx-1,3)+1 if mod_item==-1 & (survey==3)
+replace fcons = . if (mod_item != hhmod) & (mod_item!=0) & (survey==3)
+drop xx hhmod
+save "`sData'/fcons-unified_adj.dta", replace
+keep if survey ==3
+collapse (sum) fcons, by(clid hhid mod_item)
+reshape wide fcons, i(clid hhid) j(mod_item)
+tempfile ff
+save "`ff'", replace
+*non-food
+use "`sData'/nfcons-unified.dta", clear
+merge m:1 survey clid hhid using "`sData'/hh-unified.dta", nogen assert(match) keep(match) keepusing(hhmod)
+sort itemid
+replace mod_item = -1 if mod_item==0 & !inlist(itemid,3206,2001,5507,3509,3026) & (survey==3)
+egen xx = group(itemid) if mod_item==-1 & (survey==3)
+replace mod_item = mod(xx-1,3)+1 if mod_item==-1 & (survey==3)
+replace nfcons = . if (mod_item != hhmod) & (mod_item!=0) & (survey==3)
+drop xx hhmod
+save "`sData'/nfcons-unified_adj.dta", replace
+keep if survey ==3
+collapse (sum) nfcons, by(clid hhid mod_item)
+reshape wide nfcons, i(clid hhid) j(mod_item)
+tempfile fn
+save "`fn'", replace
+
 *arrange dataset
 forvalues i = 1/3 {
 	if (`i'==1) local s = "2005P"
 	else if (`i'==2) local s = "2015P"
 	else if (`i'==3) local s = "2015C"
 	*Food
-	use "`sData'/fcons-unified.dta", clear
+	use "`sData'/fcons-unified_adj.dta", clear
 	keep if survey==`i'
 	drop survey
 	ren (itemid fcons) (foodid xfood)
@@ -22,7 +54,7 @@ forvalues i = 1/3 {
 	tempfile ffood
 	save "`ffood'", replace
 	*Non-Food
-	use "`sData'/nfcons-unified.dta", clear
+	use "`sData'/nfcons-unified_adj.dta", clear
 	keep if survey==`i'
 	drop survey
 	ren (itemid nfcons) (nonfoodid xnonfood)
@@ -30,23 +62,6 @@ forvalues i = 1/3 {
 	fItems2RCS, hhid(clid hhid) itemid(nonfoodid) value(xnonfood) red(0)
 	tempfile fnonfood
 	save "`fnonfood'", replace
-	*for CAPI
-	if `i'==3 {
-		*food
-		use "`sData'/fcons-unified.dta", clear
-		keep if survey ==`i'
-		collapse (sum) fcons, by(clid hhid mod_item)
-		reshape wide fcons, i(clid hhid) j(mod_item)
-		tempfile ff
-		save "`ff'", replace
-		*non-food
-		use "`sData'/nfcons-unified.dta", clear
-		keep if survey ==`i'
-		collapse (sum) nfcons, by(clid hhid mod_item)
-		reshape wide nfcons, i(clid hhid) j(mod_item)
-		tempfile fn
-		save "`fn'", replace
-	}
 	*Household Dataset
 	use "`sData'/hh-unified.dta", clear
 	keep if survey==`i'
@@ -67,6 +82,9 @@ forvalues i = 1/3 {
 		ren nfcons* xnfcons*
 		replace xfcons0 = 0 if mi(xfcons0)
 		replace xnfcons0 = 0 if mi(xnfcons0)
+		egen xxx = rowtotal(xfood* xnonfood*)
+		replace totcons = xxx
+		drop xxx
 	}
 	egen x = rowtotal(xfood* xnonfood*)
 	assert round(totcons-x,10^-4)==0

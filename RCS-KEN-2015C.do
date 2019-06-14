@@ -10,11 +10,61 @@ if _rc != 0 {
 local mi = 50
 
 ************************************************
+* CONSUMPTION SHARES
+************************************************
+local lfood = "food nonfood"
+local ly = "2005 2015"
+foreach sf of local lfood {
+	foreach y of local ly {
+		use "${gsdData}/KEN-KIHBS`y'P-HHData.dta", clear
+		keep hhid weight x`sf'*
+		reshape long x`sf', i(hhid weight) j(itemid)
+		ren x`sf' x
+		replace x = 0 if mi(x)
+		bysort hhid: egen xt = total(x)
+		gen px = x/xt
+		replace px = 0 if mi(px)
+		collapse (mean) px [pweight=weight], by(itemid)
+		gsort -px
+		egen r = seq()
+		ren px px`y'
+		save "${gsdTemp}/`sf'-shares_`y'.dta", replace
+	}
+	use "${gsdTemp}/`sf'-shares_2005.dta", clear
+	ren itemid itemid2005
+	merge 1:1 r using "${gsdTemp}/`sf'-shares_2015.dta", nogen assert(match)
+	order r, first
+	export excel using "${gsdOutput}/KIHBS-shares.xls", sheetreplace sheet("`sf'") firstrow(var)
+	export excel using "${gsdOutput}/KIHBS-shares.xls", sheetreplace sheet("`sf'_id") nolabel firstrow(var)
+}
+
+************************************************
 * CIHBS PILOT AND SWIFT
 ************************************************
 *CIHBS pilot
+eststo clear
 capture confirm file "${gsdOutput}/KEN-KIHBS_cmp.dta"
 if _rc != 0 {
+	*get poverty lines from 2015 PAPI dataset
+	use "${gsdData}/KEN-KIHBS2015P-HHData.dta", clear
+	egen xcons = rowtotal(xfood* xnonfood*)
+	_pctile xcons [pweight=weight*hhsize], nq(100)
+	quiet forvalues i = 1/100 {
+		local pline`i' = r(r`i')
+		*for reference
+		gen ref_fgt0_i`i' = xcons < `pline`i''
+		gen ref_fgt1_i`i' = max(`pline`i'' - xcons,0) / `pline`i''
+		gen ref_fgt2_i`i' = ref_fgt1_i`i'^2
+	}
+	gen xid = 1
+	collapse (mean) ref_fgt* [pweight=weight*hhsize], by(xid)
+	reshape long ref_fgt0_i ref_fgt1_i ref_fgt2_i, i(xid) j(p)
+	ren *_i *
+	drop xid
+	order p ref_fgt0 ref_fgt1 ref_fgt2
+	tempfile fref
+	save "`fref'", replace
+
 	use "${gsdData}/KEN-KIHBS2015C-HHData.dta", clear
 	drop xfood* xnonfood* xfcons xnfcons
 	unab mcon : mcon_*
@@ -74,27 +124,26 @@ if _rc != 0 {
 	order p rcs_fgt0 rcs_fgt1 rcs_fgt2
 	tempfile frcs
 	save "`frcs'", replace
-
-	*get poverty lines from 2015 PAPI dataset
-	use "${gsdData}/KEN-KIHBS2015P-HHData.dta", clear
-	egen xcons = rowtotal(xfood* xnonfood*)
-	_pctile xcons [pweight=weight*hhsize], nq(100)
+	
+	*get simplified aggregate without imputations
+	use "${gsdData}/KEN-KIHBS2015C-HHData.dta", clear
+	egen xcons = rowtotal(xfcons? xnfcons?)
+	keep hhid xcons weight hhsize
 	quiet forvalues i = 1/100 {
-		local pline`i' = r(r`i')
 		*for reference
-		gen ref_fgt0_i`i' = xcons < `pline`i''
-		gen ref_fgt1_i`i' = max(`pline`i'' - xcons,0) / `pline`i''
-		gen ref_fgt2_i`i' = ref_fgt1_i`i'^2
+		gen red_fgt0_i`i' = xcons < `pline`i''
+		gen red_fgt1_i`i' = max(`pline`i'' - xcons,0) / `pline`i''
+		gen red_fgt2_i`i' = red_fgt1_i`i'^2
 	}
 	gen xid = 1
-	collapse (mean) ref_fgt* [pweight=weight*hhsize], by(xid)
-	reshape long ref_fgt0_i ref_fgt1_i ref_fgt2_i, i(xid) j(p)
+	collapse (mean) red_fgt* [pweight=weight*hhsize], by(xid)
+	reshape long red_fgt0_i red_fgt1_i red_fgt2_i, i(xid) j(p)
 	ren *_i *
 	drop xid
-	order p ref_fgt0 ref_fgt1 ref_fgt2
-	tempfile fref
-	save "`fref'", replace
-
+	order p red_fgt0 red_fgt1 red_fgt2
+	tempfile fred
+	save "`fred'", replace
+	
 	*add swift consumption distribution with and without MI
 	use "${gsdData}/KEN-KIHBS2005P-HHData.dta", clear
 	egen xcons = rowtotal(xfood* xnonfood*)
@@ -124,6 +173,8 @@ if _rc != 0 {
 	*output regression
 	eststo: quietly reg logmodel `logmodel' if !test [pweight=weight]
 	esttab , r2 ar2 aic
+	esttab using "${gsdOutput}/KEN-KIHBS_cmp-models.csv", r2 ar2 aic replace
+	eststo clear
 	*predict icons if test, xb
 	*apply to 2015P
 	mi set wide
@@ -154,6 +205,7 @@ if _rc != 0 {
 	*ANALYSIS
 	use "`fref'", clear
 	merge 1:1 p using "`frcs'", nogen
+	merge 1:1 p using "`fred'", nogen
 	merge 1:1 p using "`fswi'", nogen
 	save "${gsdOutput}/KEN-KIHBS_cmp.dta", replace
 } 
@@ -162,16 +214,21 @@ else use "${gsdOutput}/KEN-KIHBS_cmp.dta", clear
 *calculate absolute differences
 forvalues i = 0/2 {
 	label var ref_fgt`i' "FGT`i' Reference"
+	label var red_fgt`i' "FGT`i' Observed"
 	label var rcs_fgt`i' "FGT`i' Rapid"
 	label var swi_fgt`i' "FGT`i' X-Survey"
 	gen brcsfgt`i' = ref_fgt`i'-rcs_fgt`i'
 	gen drcsfgt`i' = abs(brcsfgt`i')
 	gen bswifgt`i' = ref_fgt`i'-swi_fgt`i'
 	gen dswifgt`i' = abs(bswifgt`i')
+	gen bredfgt`i' = ref_fgt`i'-red_fgt`i'
+	gen dredfgt`i' = abs(bredfgt`i')
 	label var brcsfgt`i' "Rapid"
 	label var drcsfgt`i' "Rapid"
 	label var bswifgt`i' "X-Survey"
 	label var dswifgt`i' "X-Survey"
+	label var bredfgt`i' "Observed"
+	label var dredfgt`i' "Observed"
 }
 mean d*
 twoway (line brcsfgt0 p, color(maroon)) (line bswifgt0 p, color(brown)) , title("FGT0", size(small)) ytitle("bias", size(small)) xtitle("Poverty Percentile", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(size(vsmall) cols(2)) graphregion(fcolor(white)) bgcolor(white) name(gfgt0, replace)
