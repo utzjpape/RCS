@@ -68,8 +68,8 @@ program define callRCS
 end
 
 *iterations
-local lc = "0 1 3 5 10 20 50"
-local lm = "2 4 6 8 10 12 15 20"
+local lc = "0 1 3 5 10 20"
+local lm = "2 4 6 8 10 12 15 20 25 30 40 50"
 *run for best method over different number of modules and core
 forvalues t = 0/1 {
 	*determine whether we use a 2005 for training and run imputations on 2015
@@ -112,7 +112,7 @@ table km metric kc if method=="mi_2cel" & inlist(indicator,"fgt0","fgt1","fgt2")
 ************************************************
 * COMPARISON WITH REDUCED
 ************************************************
-collapse (mean) p (max) max_p=p (mean) rpq_red rpq_rcs, by(method indicator metric kc km)
+collapse (mean) p (max) max_p=p, by(method indicator metric rpq_red rpq_rcs kc km)
 local sg = ""
 local lm = "bias cv"
 forvalues i=0/2 {
@@ -145,6 +145,12 @@ grc1leg `sg', imargin(b=0 t=0) graphregion(fcolor(white)) col(2) name(gfgt`i', r
 graph export "${gsdOutput}/RCS-red_fgt`i'.png", replace
 graph drop `sg'
 local sg = ""
+*some stats for the text
+summ p max_p if method=="mi_2cel" & indicator=="fgt0" & metric=="bias", d
+list if method=="mi_2cel" & indicator=="fgt0" & metric=="bias" & rpq_rcs==.5
+list if method=="red" & indicator=="fgt0" & metric=="bias" & inrange(rpq_red,.49,.51)
+list if method=="mi_2cel" & indicator=="fgt0" & metric=="bias" & inrange(rpq_rcs,.25,.25)
+
 
 ************************************************
 * COMPARISON WITH LLO
@@ -152,7 +158,7 @@ local sg = ""
 *analysis with LLO
 use "${gsdOutput}/KEN-KIHBS-t1.dta", clear
 replace p = abs(p) if inlist(metric,"bias")
-collapse (mean) p (max) max_p=p (mean) rpq_red rpq_rcs, by(method indicator metric kc km)
+collapse (mean) p (max) max_p=p, by(method indicator metric kc km rpq_red rpq_rcs)
 forvalues i=0/2 {
 	*plot for bias
 	local m = "bias"
@@ -183,3 +189,5 @@ grc1leg `sg', imargin(b=0 t=0) graphregion(fcolor(white)) col(2) name(gfgt`i', r
 graph export "${gsdOutput}/RCS-LLO_fgt`i'.png", replace
 graph drop `sg'
 local sg = ""
+*some stats for the text
+list if method=="mi_2cel" & indicator=="fgt0" & metric=="bias" & p<.009
