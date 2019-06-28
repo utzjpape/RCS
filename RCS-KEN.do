@@ -32,7 +32,7 @@ cap: prog drop callRCS
 program define callRCS
 	syntax using/, t(integer) kc(integer) km(integer)
 	*number of simulations (should be 20)
-	local nsim = 5
+	local nsim = 20
 	*number of imputations (should be 50)
 	local nmi = 50
 	*methods
