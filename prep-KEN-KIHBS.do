@@ -12,7 +12,7 @@ local sData = "${gsdDataBox}/KEN-KIHBS"
 use "`sData'/fcons-unified.dta", clear
 label copy litemid lfood
 label save lfood using "${gsdData}/KEN-KIHBS_food-label.do" , replace
-merge m:1 survey clid hhid using "`sData'/hh-unified.dta", nogen assert(match) keep(match) keepusing(hhmod)
+merge m:1 survey clid hhid using "`sData'/hh-unified.dta", nogen assert(match using) keep(match) keepusing(hhmod)
 *reduce number of core items to become more realistic
 sort itemid
 replace mod_item = -1 if mod_item==0 & !inlist(itemid,801,1101,103,105,301) & (survey==3)
@@ -30,7 +30,7 @@ save "`ff'", replace
 use "`sData'/nfcons-unified.dta", clear
 label copy litemid lnonfood
 label save lnonfood using "${gsdData}/KEN-KIHBS_nonfood-label.do" , replace
-merge m:1 survey clid hhid using "`sData'/hh-unified.dta", nogen assert(match) keep(match) keepusing(hhmod)
+merge m:1 survey clid hhid using "`sData'/hh-unified.dta", nogen assert(match using) keep(match) keepusing(hhmod)
 sort itemid
 replace mod_item = -1 if mod_item==0 & !inlist(itemid,3206,2001,5507,3509,3026) & (survey==3)
 egen xx = group(itemid) if mod_item==-1 & (survey==3)
