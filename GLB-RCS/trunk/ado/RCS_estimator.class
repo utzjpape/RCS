@@ -356,6 +356,7 @@ program define .est_mi_reg
 		error 1
 	}
 	quiet {
+		drop xfitem* xnfitem* bfitem* bnfitem*
 		* reshape to long format
 		ren (`.xfcons'0 `.xnfcons'0) (fcore nfcore)
 		ren (`.xfcons'* `.xnfcons'*) (y1* y0*)

@@ -30,6 +30,7 @@ if _rc != 0 {
 	compress
 	gen xdurables = 0
 	order hhid strata urban cluster weight hhsize xdurables mcat* mcon*
+	destring strata, replace
 	save "`using'", replace
 }
 

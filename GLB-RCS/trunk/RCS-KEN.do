@@ -18,14 +18,14 @@ if _rc != 0 {
 }
 
 *test run
-local train = 1
-capture classutil drop .r
-.r = .RCS.new
-.r.prepare using "`using`train''", dirbase("${gsdOutput}/KEN-KIHBS-test") nmodules(20) ncoref(0) ncorenf(0) nsim(2) train(`train')
-.r.mask
-.r.estimate , lmethod("avg") nmi(5)
-.r.collate
-.r.analyze
+*local train = 1
+*capture classutil drop .r
+*.r = .RCS.new
+*.r.prepare using "`using`train''", dirbase("${gsdOutput}/KEN-KIHBS-test") nmodules(20) ncoref(0) ncorenf(0) nsim(2) train(`train')
+*.r.mask
+*.r.estimate , lmethod("avg") nmi(5)
+*.r.collate
+*.r.analyze
 
 *start RCS code
 cap: prog drop callRCS
