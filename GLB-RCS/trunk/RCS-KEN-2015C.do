@@ -28,6 +28,9 @@ foreach sf of local lfood {
 		gsort -px
 		egen r = seq()
 		ren px px`y'
+		cap label drop l`sf'
+		run "${gsdData}/KEN-KIHBS_`sf'-label.do"
+		label val itemid l`sf'
 		save "${gsdTemp}/`sf'-shares_`y'.dta", replace
 	}
 	use "${gsdTemp}/`sf'-shares_2005.dta", clear

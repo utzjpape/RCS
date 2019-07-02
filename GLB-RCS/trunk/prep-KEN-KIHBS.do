@@ -2,6 +2,7 @@
 
 ma drop all
 set more off
+set seed 23081980
 
 *parameters
 *data directory
@@ -9,6 +10,8 @@ local sData = "${gsdDataBox}/KEN-KIHBS"
 
 *adjust capi pilot for smaller core
 use "`sData'/fcons-unified.dta", clear
+label copy litemid lfood
+label save lfood using "${gsdData}/KEN-KIHBS_food-label.do" , replace
 merge m:1 survey clid hhid using "`sData'/hh-unified.dta", nogen assert(match) keep(match) keepusing(hhmod)
 *reduce number of core items to become more realistic
 sort itemid
@@ -25,6 +28,8 @@ tempfile ff
 save "`ff'", replace
 *non-food
 use "`sData'/nfcons-unified.dta", clear
+label copy litemid lnonfood
+label save lnonfood using "${gsdData}/KEN-KIHBS_nonfood-label.do" , replace
 merge m:1 survey clid hhid using "`sData'/hh-unified.dta", nogen assert(match) keep(match) keepusing(hhmod)
 sort itemid
 replace mod_item = -1 if mod_item==0 & !inlist(itemid,3206,2001,5507,3509,3026) & (survey==3)
