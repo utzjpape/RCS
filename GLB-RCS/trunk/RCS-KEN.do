@@ -128,7 +128,7 @@ forvalues i=0/2 {
 		(qfit max_p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(eltgreen)) ///
 		(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red",  msize(vsmall) color(emerald)) ///
 		(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="red", color(emerald)) ///
-		, title("FGT`i'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of effective questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(1 "Rapid (avg)" 2 "Rapid (avg; fitted)" 3 "Rapid (max)" 4 "Rapid (max; fitted)" 5 "Reduced (avg)" 6 "Reduced (avg; fitted)" 7 "Reduced (max)" 8 "Reduced (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
+		, title("FGT`i'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of effective questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(3 "Rapid (avg)" 4 "Rapid (avg; fitted)" 1 "Rapid (max)" 2 "Rapid (max; fitted)" 7 "Reduced (avg)" 8 "Reduced (avg; fitted)" 5 "Reduced (max)" 6 "Reduced (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
 	local sg = "`sg' `g'"
 	*plot for cv
 	local m = "cv"
@@ -138,7 +138,7 @@ forvalues i=0/2 {
 		(qfit max_p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
 		(scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel",  msize(vsmall) color(maroon)) ///
 		(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
-		, title("FGT`i'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of effective questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(1 "Rapid (avg)" 2 "Rapid (avg; fitted)" 3 "Rapid (max)" 4 "Rapid (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
+		, title("FGT`i'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of effective questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(3 "Rapid (avg)" 4 "Rapid (avg; fitted)" 1 "Rapid (max)" 2 "Rapid (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
 	local sg = "`sg' `g'"
 }
 grc1leg `sg', imargin(b=0 t=0) graphregion(fcolor(white)) col(2) name(gfgt`i', replace) 
@@ -172,7 +172,7 @@ forvalues i=0/2 {
 		(qfit max_p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(eltgreen)) ///
 		(scatter p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", msize(vsmall) color(emerald)) ///
 		(qfit p rpq_red if indicator=="fgt`i'" & metric=="`m'" & method=="llo", color(emerald)) ///
-		, title("FGT`i'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of effective questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(1 "Rapid (avg)" 2 "Rapid (avg; fitted)" 3 "Rapid (max)" 4 "Rapid (max; fitted)" 5 "Adj. reduced (avg)" 6 "Adj. reduced (avg; fitted)" 7 "Adj. reduced (max)" 8 "Adj. reduced (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
+		, title("FGT`i'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of effective questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(3 "Rapid (avg)" 4 "Rapid (avg; fitted)" 1 "Rapid (max)" 2 "Rapid (max; fitted)" 7 "Adj. reduced (avg)" 8 "Adj. reduced (avg; fitted)" 5 "Adj. reduced (max)" 6 "Adj. reduced (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
 	local sg = "`sg' `g'"
 	*plot for cv
 	local m = "cv"
@@ -182,7 +182,7 @@ forvalues i=0/2 {
 		(qfit max_p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
 		(scatter p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel",  msize(vsmall) color(maroon)) ///
 		(qfit p rpq_rcs if indicator=="fgt`i'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
-		, title("FGT`i'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of effective questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(1 "Rapid (avg)" 2 "Rapid (avg; fitted)" 3 "Rapid (max)" 4 "Rapid (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
+		, title("FGT`i'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of effective questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(3 "Rapid (avg)" 4 "Rapid (avg; fitted)" 1 "Rapid (max)" 2 "Rapid (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
 	local sg = "`sg' `g'"
 }
 grc1leg `sg', imargin(b=0 t=0) graphregion(fcolor(white)) col(2) name(gfgt`i', replace)

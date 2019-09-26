@@ -101,6 +101,10 @@ program define fItems2RCS
 	foreach val of local `itemid'_levels {
 		local `itemid'_`val' : label `: value label `itemid'' `val'
 	}
+	*remove 0 consumption items
+	bysort `itemid': egen x`value' = total(`value')
+	quiet: drop if x`value'==0 | missing(x`value')
+	drop x`value'
 	*create zeros for missing values
 	quiet: reshape wide `value', i(`hhid') j(`itemid')
 	foreach v of varlist `value'* {
