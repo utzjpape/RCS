@@ -392,13 +392,17 @@ program define .est_mi_reg
 			forvalues food = 0/1 {
 				foreach imod of local lmod {
 					count if (y_0==1) & ((imod==`imod') & (food==`food'))
-					if r(N)>0 {
+					if r(N)>5 {
 						capture: mi impute monotone (logit, augment) y_0 (reg, cond(if y_0==0)) y = `.`log'model' if imod==`imod' & food==`food', `add'
 						local r= _rc
-						if `r'==430 {
+						if inlist(`r',430,2000) {
 							mi impute monotone (logit y_0 `.minmodel', augment) (reg y `.`log'model', cond(if y_0==0)) if imod==`imod' & food==`food', custom `add'
 						}
-						else if `r'>0 error `r'
+						else if `r'>0 {
+							di as error "Error (`r') in mi_2cel estimation with imod=`imod' and food=`food':"
+							noisily: tab y_0 if ((imod==`imod') & (food==`food'))
+							error `r'
+						}
 					}
 					else {
 						mi impute reg y = `.`log'model' if imod==`imod' & food==`food', `add'
