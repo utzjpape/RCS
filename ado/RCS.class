@@ -36,6 +36,11 @@ program .new
 		display as result in smcl `"Please install package {it:dirlist} from SSC in order to run this do-file;"' _newline `"you can do so by clicking this link: {stata "ssc install dirlist":auto-install dirlist}"'
 		exit 199
 	}
+	capture : which fastgini
+	if (_rc) {
+		display as result in smcl `"Please install package {it:fastgini} from SSC in order to run this do-file;"' _newline `"you can do so by clicking this link: {stata "ssc install fastgini":auto-install fastgini}"'
+		exit 199
+	}
 end
 program define .fse, rclass
 	args vref vest
@@ -868,21 +873,22 @@ program define .analyze
 					local pline = "pline_llo"
 					merge m:1 simulation using "`.lc_sdTemp'/`pline'.dta", nogen assert(match using) keep(match) keepusing("`pline'*")
 				}
-				*calculate FGT and gini
+				*calculate FGT
 				sort simulation est
-				quiet: by simulation: egen i = seq() if ~missing(est)
-				quiet: by simulation: egen n = max(i) if ~missing(est)
-				quiet: gen x_gini = (n + 1 - i) * est  if ~missing(est)
-				drop i n
 				quiet forvalues i = 1/100 {
 					gen x_fgt0_i`i' = est < ``pline'`i''  if ~missing(est)
 					gen x_fgt1_i`i' = max(``pline'`i'' - est,0) / ``pline'`i'' if ~missing(est)
 					gen x_fgt2_i`i' = x_fgt1_i`i'^2 if ~missing(est)
 				}
-				collapse (mean) x_* est (count) n=hhid [pweight=weight*hhsize], by(simulation)
-				*finalize gini
-				quiet: replace x_gini = (n+1-2*x_gini / est) / n
-				drop est n
+				*calculate gini
+				quiet: gen x_gini = .
+				quiet: levelsof simulation, local(nsim)
+				foreach isim of local nsim {
+					quiet: fastgini est if simulation==`isim' [pweight=weight*hhsize]
+					replace x_gini = r(gini) if simulation==`isim'
+				}
+				*summarize
+				collapse (mean) x_* [pweight=weight*hhsize], by(simulation)
 				save "`.lc_sdTemp'/simd_`v'_stats.dta", replace
 				capture: erase "`.lc_sdTemp'/simd_`v'_pstats.dta"
 			}
@@ -991,7 +997,7 @@ program define .analyze
 	table method indicator metric, c(mean p) format(%9.2f)
 	save "`.lc_sdOut'/metrics`sfsuff'.dta", replace
 	gen nmod = `.nmodules'
-	quiet merge m:1 nmod using "`.lc_sdTemp'/tstats.dta", nogen assert(match)
+	quiet merge m:1 nmod using "`.lc_sdTemp'/tstats.dta", nogen
 end
 
 program define .run
