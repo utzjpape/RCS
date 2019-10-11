@@ -59,12 +59,14 @@ if _rc != 0 {
 		gen ref_fgt1_i`i' = max(`pline`i'' - xcons,0) / `pline`i''
 		gen ref_fgt2_i`i' = ref_fgt1_i`i'^2
 	}
+	quiet: fastgini xcons [pweight=weight*hhsize]
+	gen ref_gini = r(gini)
 	gen xid = 1
-	collapse (mean) ref_fgt* [pweight=weight*hhsize], by(xid)
+	collapse (mean) ref_* [pweight=weight*hhsize], by(xid)
 	reshape long ref_fgt0_i ref_fgt1_i ref_fgt2_i, i(xid) j(p)
 	ren *_i *
 	drop xid
-	order p ref_fgt0 ref_fgt1 ref_fgt2
+	order p ref_fgt0 ref_fgt1 ref_fgt2 ref_gini
 	tempfile fref
 	save "`fref'", replace
 
@@ -119,12 +121,14 @@ if _rc != 0 {
 		gen rcs_fgt1_i`i' = max(`pline`i'' - xcons,0) / `pline`i''
 		gen rcs_fgt2_i`i' = rcs_fgt1_i`i'^2
 	}
+	quiet: fastgini xcons [pweight=weight*hhsize]
+	gen rcs_gini = r(gini)
 	gen xid = 1
-	collapse (mean) rcs_fgt* [pweight=weight*hhsize], by(xid)
+	collapse (mean) rcs_* [pweight=weight*hhsize], by(xid)
 	reshape long rcs_fgt0_i rcs_fgt1_i rcs_fgt2_i, i(xid) j(p)
 	ren *_i *
 	drop xid
-	order p rcs_fgt0 rcs_fgt1 rcs_fgt2
+	order p rcs_fgt0 rcs_fgt1 rcs_fgt2 rcs_gini
 	tempfile frcs
 	save "`frcs'", replace
 	
@@ -138,12 +142,14 @@ if _rc != 0 {
 		gen red_fgt1_i`i' = max(`pline`i'' - xcons,0) / `pline`i''
 		gen red_fgt2_i`i' = red_fgt1_i`i'^2
 	}
+	quiet: fastgini xcons [pweight=weight*hhsize]
+	gen red_gini = r(gini)
 	gen xid = 1
-	collapse (mean) red_fgt* [pweight=weight*hhsize], by(xid)
+	collapse (mean) red_* [pweight=weight*hhsize], by(xid)
 	reshape long red_fgt0_i red_fgt1_i red_fgt2_i, i(xid) j(p)
 	ren *_i *
 	drop xid
-	order p red_fgt0 red_fgt1 red_fgt2
+	order p red_fgt0 red_fgt1 red_fgt2 red_gini
 	tempfile fred
 	save "`fred'", replace
 	
@@ -196,12 +202,14 @@ if _rc != 0 {
 		gen swi_fgt1_i`i' = max(`pline`i'' - icons,0) / `pline`i''
 		gen swi_fgt2_i`i' = swi_fgt1_i`i'^2
 	}
+	quiet: fastgini icons [pweight=weight*hhsize]
+	gen swi_gini = r(gini)
 	gen xid = 1
-	collapse (mean) swi_fgt* [pweight=weight*hhsize], by(xid)
+	collapse (mean) swi_* [pweight=weight*hhsize], by(xid)
 	reshape long swi_fgt0_i swi_fgt1_i swi_fgt2_i, i(xid) j(p)
 	ren *_i *
 	drop xid
-	order p swi_fgt0 swi_fgt1 swi_fgt2
+	order p swi_fgt0 swi_fgt1 swi_fgt2 swi_gini
 	tempfile fswi
 	save "`fswi'", replace
 
@@ -215,28 +223,29 @@ if _rc != 0 {
 else use "${gsdOutput}/KEN-KIHBS_cmp.dta", clear
 
 *calculate absolute differences
-forvalues i = 0/2 {
-	label var ref_fgt`i' "FGT`i' Reference"
-	label var red_fgt`i' "FGT`i' Observed"
-	label var rcs_fgt`i' "FGT`i' Rapid"
-	label var swi_fgt`i' "FGT`i' X-Survey"
-	gen brcsfgt`i' = ref_fgt`i'-rcs_fgt`i'
-	gen drcsfgt`i' = abs(brcsfgt`i')
-	gen bswifgt`i' = ref_fgt`i'-swi_fgt`i'
-	gen dswifgt`i' = abs(bswifgt`i')
-	gen bredfgt`i' = ref_fgt`i'-red_fgt`i'
-	gen dredfgt`i' = abs(bredfgt`i')
-	label var brcsfgt`i' "Rapid"
-	label var drcsfgt`i' "Rapid"
-	label var bswifgt`i' "X-Survey"
-	label var dswifgt`i' "X-Survey"
-	label var bredfgt`i' "Observed"
-	label var dredfgt`i' "Observed"
+local lind = "fgt0 fgt1 fgt2 gini"
+foreach sind of local lind {
+	label var ref_`sind' "`sind' Reference"
+	label var red_`sind' "`sind' Observed"
+	label var rcs_`sind' "`sind' Rapid"
+	label var swi_`sind' "`sind' X-Survey"
+	gen brcs`sind' = ref_`sind'-rcs_`sind'
+	gen drcs`sind' = abs(brcs`sind')
+	gen bswi`sind' = ref_`sind'-swi_`sind'
+	gen dswi`sind' = abs(bswi`sind')
+	gen bred`sind' = ref_`sind'-red_`sind'
+	gen dred`sind' = abs(bred`sind')
+	label var brcs`sind' "Rapid"
+	label var drcs`sind' "Rapid"
+	label var bswi`sind' "X-Survey"
+	label var dswi`sind' "X-Survey"
+	label var bred`sind' "Observed"
+	label var dred`sind' "Observed"
 }
 mean d*
-twoway (line brcsfgt0 p, color(maroon)) (line bswifgt0 p, color(brown)) , title("FGT0", size(small)) ytitle("bias", size(small)) xtitle("Poverty Percentile", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(size(vsmall) cols(2)) graphregion(fcolor(white)) bgcolor(white) name(gfgt0, replace)
-twoway (line brcsfgt1 p, color(maroon)) (line bswifgt1 p, color(brown)) , title("FGT1", size(small)) ytitle("bias", size(small)) xtitle("Poverty Percentile", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(size(vsmall) cols(2)) graphregion(fcolor(white)) bgcolor(white) name(gfgt1, replace)
-twoway (line brcsfgt2 p, color(maroon)) (line bswifgt2 p, color(brown)) , title("FGT2", size(small)) ytitle("bias", size(small)) xtitle("Poverty Percentile", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(size(vsmall) cols(2)) graphregion(fcolor(white)) bgcolor(white) name(gfgt2, replace)
-grc1leg gfgt0 gfgt1 gfgt2, imargin(b=0 t=0) graphregion(fcolor(white)) col(1) name(gfgt, replace)
-graph export "${gsdOutput}/RCS-XS_fgt.png", replace
+twoway (line brcsfgt0 p, color(maroon)) (line bswifgt0 p, color(brown)) , title("fgt0", size(small)) ytitle("bias", size(small)) xtitle("Poverty Percentile", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(size(vsmall) cols(2)) graphregion(fcolor(white)) bgcolor(white) name(gfgt0, replace)
+twoway (line brcsfgt1 p, color(maroon)) (line bswifgt1 p, color(brown)) , title("fgt1", size(small)) ytitle("bias", size(small)) xtitle("Poverty Percentile", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(size(vsmall) cols(2)) graphregion(fcolor(white)) bgcolor(white) name(gfgt1, replace)
+twoway (line brcsfgt2 p, color(maroon)) (line bswifgt2 p, color(brown)) , title("fgt2", size(small)) ytitle("bias", size(small)) xtitle("Poverty Percentile", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(size(vsmall) cols(2)) graphregion(fcolor(white)) bgcolor(white) name(gfgt2, replace)
+grc1leg gfgt0 gfgt1 gfgt2, imargin(b=0 t=0) graphregion(fcolor(white)) col(1) name(gind, replace)
+graph export "${gsdOutput}/RCS-XS.png", replace
 graph drop gfgt0 gfgt1 gfgt2
