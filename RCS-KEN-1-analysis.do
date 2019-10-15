@@ -21,10 +21,8 @@ if _rc != 0 {
 use "${gsdOutput}/KEN-KIHBS-t0.dta", clear
 replace p = abs(p) if metric == "bias"
 *estimation technique comparison
-table method metric kc if !inlist(method,"llo","red") & indicator=="fgt0" & inlist(metric,"bias","cv"), by(km) c(mean p) format(%9.2f)
-table method metric kc if !inlist(method,"llo","red") & indicator=="fgt1" & inlist(metric,"bias","cv"), by(km) c(mean p) format(%9.2f)
-table method metric kc if !inlist(method,"llo","red") & indicator=="fgt2" & inlist(metric,"bias","cv"), by(km) c(mean p) format(%9.2f)
-table method metric kc if !inlist(method,"llo","red") & indicator=="gini" & inlist(metric,"bias","cv"), by(km) c(mean p) format(%9.2f)
+table method metric kc if !inlist(method,"llo","red") & inlist(metric,"bias","cv") & (km==2), by(indicator) c(mean p) format(%9.2f)
+table method metric km if !inlist(method,"llo","red") & inlist(metric,"bias","cv") & (kc==0), by(indicator) c(mean p) format(%9.2f)
 *module - core tradeoff
 table km metric kc if method=="mi_2cel" & inlist(indicator,"fgt0","fgt1","fgt2","gini") & inlist(metric,"bias"), by(indicator) c(mean p) format(%9.3f)
 table km metric kc if method=="mi_2cel" & inlist(indicator,"fgt0","fgt1","fgt2","gini") & inlist(metric,"cv"), by(indicator) c(mean p) format(%9.3f)

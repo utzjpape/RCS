@@ -40,10 +40,13 @@ foreach sf of local lfood {
 	export excel using "${gsdOutput}/KIHBS-shares.xls", sheetreplace sheet("`sf'") firstrow(var)
 	export excel using "${gsdOutput}/KIHBS-shares.xls", sheetreplace sheet("`sf'_id") nolabel firstrow(var)
 }
+* BALANCE of modules
+use "${gsdData}/KEN-KIHBS2015C-HHData.dta", clear
+tab hhmod
 
-************************************************
-* CIHBS PILOT AND SWIFT
-************************************************
+************************************************************************
+* CALCULATE INDICATORS FOR KIHBS 2015/16, CIHBS 2015/16 (RCS) AND SWIFT
+************************************************************************
 *CIHBS pilot
 eststo clear
 capture confirm file "${gsdOutput}/KEN-KIHBS_cmp.dta"
