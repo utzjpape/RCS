@@ -99,7 +99,7 @@ forvalues i = 1/3 {
 	drop if totcons > 5*r(sd)
 	if `i'==3 local hhmod = "hhmod xfcons* xnfcons*"
 	else local hhmod = ""
-	keep clid urban uid county weight hhsize rooms ownhouse wall roof floor impwater impsan elec_acc depen_cat nchild pchild nadult padult nsenior psenior literacy malehead ageheadg hhedu hhh_empstat asset_index xfood* xnonfood* `hhmod'
+	keep clid urban uid county weight hh* rooms ownhouse wall roof floor impwater impsan elec_acc depen_cat nchild pchild nadult padult nsenior psenior literacy malehead ageheadg hhedu hhh_empstat asset_index xfood* xnonfood* `hhmod'
 	ren (uid clid county asset_index) (hhid cluster strata assets)
 	ren (rooms ownhouse impwater impsan elec_acc nchild pchild nadult padult nsenior psenior literacy assets) mcon_=
 	ren (wall roof floor depen_cat malehead ageheadg hhedu hhh_empstat) mcat_=
