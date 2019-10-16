@@ -40,7 +40,16 @@ foreach sf of local lfood {
 	export excel using "${gsdOutput}/KIHBS-shares.xls", sheetreplace sheet("`sf'") firstrow(var)
 	export excel using "${gsdOutput}/KIHBS-shares.xls", sheetreplace sheet("`sf'_id") nolabel firstrow(var)
 }
-* BALANCE of modules
+
+******************************************
+* BALANCE TESTS FOR 2015/16 PAPI AND CAPI
+******************************************
+*balance tests for household characteristics
+use "${gsdData}/KEN-KIHBS2015P-HHData.dta", clear
+append using "${gsdData}/KEN-KIHBS2015C-HHData.dta", gen(survey)
+fvunab xcat : i.mcat*
+xi: balancetable survey mcon* `xcat' using "${gsdOutput}/KIHBS-balance.xlsx" [aweight=weight], pval vce(cluster cluster) varla replace
+*balance of modules for CAPI
 use "${gsdData}/KEN-KIHBS2015C-HHData.dta", clear
 tab hhmod
 
