@@ -41,6 +41,11 @@ program .new
 		display as result in smcl `"Please install package {it:fastgini} from SSC in order to run this do-file;"' _newline `"you can do so by clicking this link: {stata "ssc install fastgini":auto-install fastgini}"'
 		exit 199
 	}
+	*work in temp directory, essential for parallel execution of mi commands
+	tempfile sdtemp
+	mkdir "`sdtemp'"
+	.sdtemp = "`sdtemp'"
+	quiet: cd "`.sdTemp'"
 end
 program define .fse, rclass
 	args vref vest
@@ -661,6 +666,8 @@ program define .estimate
 	file open fhm using "`.lc_sdTemp'/model.txt", replace write
 	file write fhm "`.estimator.model'" _n "`.estimator.logmodel'"
 	file close fhm
+	*change to temp directory for mi commands
+	quiet: cd "`.sdTemp'"
 	*start iteration over simulations
 	forvalues isim = 1 / `.nsim' {
 		di "Entering simulation `isim':"
@@ -669,8 +676,6 @@ program define .estimate
 			di " ... running for `smethod' ..."
 			capture: confirm file "`.lc_sdTemp'/sim_`smethod'_`isim'.dta"
 			if ((_rc>0) | ("`force'"~="")) {
-				*change directory to make sure we are in a writable directory for some mi commands
-				quiet: cd "`.lc_sdTemp'"
 				*load prepared dataset for mi
 				use "`.lc_sdTemp'/mi_`isim'.dta", clear
 				quiet: xi i.strata i.pxdurables `mcat'
@@ -706,7 +711,8 @@ program define .estimate
 				}
 				quiet: compress
 				save "`.lc_sdTemp'/sim_`smethod'_`isim'.dta", replace
-				capture: erase save "`.lc_sdTemp'/simd_`smethod'.dta", replace
+				*ensure .collate is re-run afterwards
+				capture: erase "`.lc_sdTemp'/simd_`smethod'.dta", replace
 			}
 			*add to lmethod
 			if !strpos("`.lmethod'","`smethod'") .lmethod = "`.lmethod' `smethod'"
@@ -723,6 +729,8 @@ program define .collate
 		error 1
 	}
 
+	*change to temp directory for mi commands
+	quiet: cd "`.sdTemp'"
 	*extract detailed results from estimation
 	foreach smethod in `.lmethod' {
 		di "Extracting for `smethod':"
