@@ -47,7 +47,33 @@ foreach sf of local lfood {
 *balance tests for household characteristics
 use "${gsdData}/KEN-KIHBS2015P-HHData.dta", clear
 append using "${gsdData}/KEN-KIHBS2015C-HHData.dta", gen(survey)
+svyset cluster [pweight = weight], strata(strata) singleunit(centered)
+unab xcon : mcon*
 fvunab xcat : i.mcat*
+xi `xcat'
+local vars = "`xcon' `_dta[__xi__Vars__To__Drop__]'"
+file open fh using "${gsdOutput}/KIHBS-baltests.csv", write replace
+file write fh "variable" _tab "KIHBS" _tab "Pilot" _tab "Difference" _n
+foreach v of local vars {
+	svy: mean `v', over(survey)
+	matrix M = e(b)
+	matrix SE = e(V)
+	scalar me0 = M[1,1]
+	scalar me1 = M[1,2]
+	scalar diff = me1 - me0
+	scalar se0 = SE[1,1]^(1/2)
+	scalar se1 = SE[2,2]^(1/2)
+	test [`v']0 = [`v']1
+	local star =""
+	if r(p) <= .1 local star = "`star'*"
+	if r(p) <= .05 local star = "`star'*"
+	if r(p) <= .01 local star = "`star'*"
+	if r(p) < 0.001 local sp = "<0.001"
+	else local sp : di %5.3f (r(p))
+	file write fh "`v'" _tab %5.3f (me0) _tab %5.3f (me1) _tab %5.3f (diff) "`star'" _n _tab "(" %5.3f (se0) ")" _tab "(" %5.3f (se1) ")" _tab "(`sp')" _n
+}
+file close fh
+
 xi: balancetable survey mcon* `xcat' using "${gsdOutput}/KIHBS-balance.xlsx" [aweight=weight], pval vce(cluster cluster) varla replace
 *balance of modules for CAPI
 use "${gsdData}/KEN-KIHBS2015C-HHData.dta", clear
