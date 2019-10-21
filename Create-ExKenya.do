@@ -1,6 +1,6 @@
 *prepares example dataset
 *which survey? choose 2005P 2015P 2015C
-local s= "2015P"
+local s= "2005P"
 local red=""
 local using= "${gsdData}/KEN-KIHBS`s'-HHData`red'.dta"
 capture confirm file "`using'"
@@ -9,9 +9,9 @@ if _rc != 0 {
 }
 
 *create input dataset for simulation
-if "`1'"=="" local core = 0
+if "`1'"=="" local core = 10
 else local core = `1'
-if "`2'"=="" local nm = 2
+if "`2'"=="" local nm = 5
 else local nm = `2'
 if "`3'"=="" local random = 0
 else local random = `3'
@@ -36,3 +36,8 @@ forvalues i = 0/`nm' {
 }
 drop px*
 save "${gsdOutput}/KIHBS`s'-Example_c`core'-m`nm'-r`random'.dta", replace
+*reduce size
+sort cluster
+egen x = group(cluster)
+keep if mod(x,2) == 0
+save "${gsdOutput}/KIHBS`s'-Example_c`core'-m`nm'-r`random'_small.dta", replace
