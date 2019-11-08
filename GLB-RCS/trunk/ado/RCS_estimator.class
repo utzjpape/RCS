@@ -431,3 +431,61 @@ program define .est_mi_reg
 		mi ren nfcore `.xnfcons'0
 	}
 end
+
+*code to estimate items rather than modules
+
+*use mi to estimate missing consumption, all items at once
+program define .est_xmi
+	*calculating number of consumed items
+	egen n1 = rowtotal(bfitem*)
+	gen n1sq = n1*n1
+	egen n2 = rowtotal(bnfitem*)
+	gen n2sq = n2*n2
+	* renaming
+	rename xfitem* x1*
+	rename xnfitem* x2*
+	rename bfitem* c1*
+	rename bnfitem* c2* 
+	* reshape to long format
+	qui reshape long x c, i(`.hhid') j(item)
+	replace x = . if !c
+	replace x = log(x) if c
+	*flag for food items
+	gen food = floor(item/(10^floor(log10(item))))==1
+	*calculate probability of b for each item
+	gen b = ~missing(x) if c
+	bysort item: egen nb = total(b)
+	bysort item: egen ncb = count(b)
+	gen pb = nb/ncb
+	drop nb ncb
+	* estimate, predict, impute
+	*run MI
+	mi set wide
+	mi register imputed x
+	mi register regular n1 n1sq n2 n2sq pb c
+	mi register regular `.register'
+	mi impute regress x = n1 n1sq n2 n2sq pb, add(`.nmi') conditional(c==1) by(item)
+	*transform into household-level dataset
+	keep `.hhid' y _* item c
+	mi passive: gen z = exp(y) if c
+	mi passive: replace z = 0 if !c
+	*reshape back to the hh-level
+	drop x
+	mi register imputed z
+	mi update
+	*sum at the hh-level
+	mi convert flongsep _rcs_xmi, clear
+	mi xeq: by `.hhid', sort: egen z_sum = total(z)
+	*maintain mi consistency
+	mi xeq 0: gen Mis_z = (z==.) ; by `.hhid', sort: egen Mis_total = total(Mis_z) ; replace z_sum = . if Mis_total>0
+	*only keep hh-level records
+	mi xeq: sort `.hhid' item; by `.hhid': drop if _n>1 ; drop item z Mis_z Mis_total ; ren z_sum xfcons1
+	mi register imputed xfcons1
+	mi convert wide, clear
+	mi erase _rcs_ri_mi_par
+	*note that we stop distinguishing between food and non-food here (for computational efficiencies)
+	gen xnfcons1 = 0
+	*all consumption is collected in module 1; thus, need to set module 0 to be zero
+	gen xfcons0 = 0
+	gen xnfcons0 = 0
+end
