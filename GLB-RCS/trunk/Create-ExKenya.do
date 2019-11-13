@@ -40,4 +40,10 @@ save "${gsdOutput}/KIHBS`s'-Example_c`core'-m`nm'-r`random'.dta", replace
 sort cluster
 egen x = group(cluster)
 keep if mod(x,2) == 0
+preserve
+drop x
 save "${gsdOutput}/KIHBS`s'-Example_c`core'-m`nm'-r`random'_small.dta", replace
+restore
+keep if mod(x,24) == 0
+drop x
+save "${gsdOutput}/KIHBS`s'-Example_c`core'-m`nm'-r`random'_vsmall.dta", replace
