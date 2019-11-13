@@ -111,3 +111,46 @@ graph drop `sg'
 local sg = ""
 *some stats for the text
 list if method=="mi_2cel" & indicator=="fgt0" & metric=="bias" & p<.009
+
+************************************************
+* COMPARISON WITH SWIFT2
+************************************************
+*analysis with LLO
+use "${gsdOutput}/KEN-KIHBS-t1.dta", clear
+replace p = abs(p) if inlist(metric,"bias")
+collapse (mean) p (max) max_p=p, by(method indicator metric kc km rpq_red rpq_rcs)
+local lind = "fgt0 fgt1 fgt2 gini"
+foreach sind of local lind {
+	*plot for bias
+	local m = "bias"
+	local g = "g`sind'_`m'"
+	twoway ///
+		(scatter max_p rpq_rcs if indicator=="`sind'" & metric=="`m'" & method=="mi_2cel", msize(vsmall) color(erose)) ///
+		(qfit max_p rpq_rcs if indicator=="`sind'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
+		(scatter p rpq_rcs if indicator=="`sind'" & metric=="`m'" & method=="mi_2cel", msize(vsmall) color(maroon)) ///
+		(qfit p rpq_rcs if indicator=="`sind'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
+		(scatter max_p rpq_red if indicator=="`sind'" & metric=="`m'" & method=="swift2", msize(vsmall) color(eltgreen)) ///
+		(qfit max_p rpq_red if indicator=="`sind'" & metric=="`m'" & method=="swift2", color(eltgreen)) ///
+		(scatter p rpq_red if indicator=="`sind'" & metric=="`m'" & method=="swift2", msize(vsmall) color(emerald)) ///
+		(qfit p rpq_red if indicator=="`sind'" & metric=="`m'" & method=="swift2", color(emerald)) ///
+		, title("`sind'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of effective questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(3 "Rapid (avg)" 4 "Rapid (avg; fitted)" 1 "Rapid (max)" 2 "Rapid (max; fitted)" 7 "Swift 2.0 (avg)" 8 "Swift 2.0 (avg; fitted)" 5 "Swift 2.0 (max)" 6 "Swift 2.0 (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
+	local sg = "`sg' `g'"
+	*plot for cv
+	local m = "cv"
+	local g = "g`sind'_`m'"
+	twoway ///
+		(scatter max_p rpq_rcs if indicator=="`sind'" & metric=="`m'" & method=="mi_2cel", msize(vsmall) color(erose)) ///
+		(qfit max_p rpq_rcs if indicator=="`sind'" & metric=="`m'" & method=="mi_2cel", color(erose)) ///
+		(scatter p rpq_rcs if indicator=="`sind'" & metric=="`m'" & method=="mi_2cel", msize(vsmall) color(maroon)) ///
+		(qfit p rpq_rcs if indicator=="`sind'" & metric=="`m'" & method=="mi_2cel", color(maroon)) ///
+		(scatter max_p rpq_red if indicator=="`sind'" & metric=="`m'" & method=="swift2", msize(vsmall) color(eltgreen)) ///
+		(qfit max_p rpq_red if indicator=="`sind'" & metric=="`m'" & method=="swift2", color(eltgreen)) ///
+		(scatter p rpq_red if indicator=="`sind'" & metric=="`m'" & method=="swift2", msize(vsmall) color(emerald)) ///
+		(qfit p rpq_red if indicator=="`sind'" & metric=="`m'" & method=="swift2", color(emerald)) ///
+		, title("`sind'", size(small)) ytitle("`m'", size(small)) xtitle("Proportion of effective questions", size(small)) ylabel(,angle(0) labsize(small)) xlabel(,labsize(small)) legend(order(3 "Rapid (avg)" 4 "Rapid (avg; fitted)" 1 "Rapid (max)" 2 "Rapid (max; fitted)" 7 "Swift 2.0 (avg)" 8 "Swift 2.0 (avg; fitted)" 5 "Swift 2.0 (max)" 6 "Swift 2.0 (max; fitted)") size(vsmall) cols(4)) graphregion(fcolor(white)) bgcolor(white) name(`g', replace)
+	local sg = "`sg' `g'"
+}
+grc1leg `sg', imargin(b=0 t=0) graphregion(fcolor(white)) col(2) name(gllo, replace)
+graph export "${gsdOutput}/RCS-SW2.png", replace
+graph drop `sg'
+local sg = ""

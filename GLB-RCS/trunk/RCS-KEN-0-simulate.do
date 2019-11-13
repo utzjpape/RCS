@@ -36,7 +36,7 @@ program define callRCS
 	*number of imputations (should be 50)
 	local nmi = 50
 	*methods
-	local lmethod = "med avg reg tobit mi_reg mi_2cel"
+	local lmethod = "med avg reg tobit mi_reg mi_2cel swift2"
 	local dirbase = "${gsdOutput}/KEN-KIHBS-c`kc'-m`km'-t`t'"
 	*create instance to run RCS simulations
 	capture classutil drop .r
@@ -54,10 +54,10 @@ program define callRCS
 	else {
 		.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim') train(`t')
 		.r.mask
-		.r.estimate , lmethod("mi_2cel") nmi(`nmi')
+		.r.estimate , lmethod("mi_2cel swift2") nmi(`nmi')
 	}
-	.r.collate
-	.r.analyze
+	.r.collate , force
+	.r.analyze , force
 	gen kc = `kc'
 	label var kc "Parameter: number of core items"
 	gen km = `km'

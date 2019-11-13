@@ -4,6 +4,7 @@ version 14.2
 class RCS_estimator {
 	double nmi
 	double nmodules
+	double pq
 	string model
 	string logmodel
 	string minmodel
@@ -136,8 +137,12 @@ program define .select_model
 	.register = "`: list uniq register'"
 	.init=2
 end
+*parameters:
+*  method: name of the method to estimate
+*  pq: only needed for swift2: ratio of sample with full consumption
 program define .estimate
-	syntax , method(string)
+	syntax , method(string) [pq(real -1.0)]
+	.pq = `pq'
 	*save dataset to restore afterwards
 	tempfile fh
 	unab x_order : *
@@ -430,6 +435,25 @@ program define .est_mi_reg
 		mi ren fcore `.xfcons'0
 		mi ren nfcore `.xnfcons'0
 	}
+end
+
+*******************************
+* other methods like swift    *
+*******************************
+
+program define .est_swift2
+	syntax
+	*select full consumption subset
+	gen sample = runiform()
+	replace sample = sample<`.pq'
+	gen icons = ln(ccons) if sample
+	*impute for non-subset
+	mi set wide
+	mi register imputed icons
+	mi register regular `.register'
+	*run ols 
+	mi impute regress icons = `.logmodel', add(`.nmi')
+	mi passive: gen xcons = exp(icons)
 end
 
 *code to estimate items rather than modules
