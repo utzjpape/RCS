@@ -676,8 +676,11 @@ program define .estimate
 			di " ... running for `smethod' ..."
 			capture: confirm file "`.lc_sdTemp'/sim_`smethod'_`isim'.dta"
 			if ((_rc>0) | ("`force'"~="")) {
+				*load ratio of questions for swift2 comparison
+				use "`.lc_sdTemp'/tstats`isim'.dta", clear
+				local pq = rpq_rcs[1]
 				*load prepared dataset for mi
-				use "`.lc_sdTemp'/mi_`isim'.dta", clear
+				use "`.lc_sdTemp'/mi_`isim'.dta", clear				
 				quiet: xi i.strata i.pxdurables `mcat'
 				*prepare variables
 				foreach v of varlist xfcons? xnfcons? xdurables {
@@ -686,19 +689,22 @@ program define .estimate
 				}
 				*method selection
 				local mipre = ""
-				quiet: .estimator.estimate , method("`smethod'")
-				gen xcons = .
-				*check if mi dataset
+				quiet: .estimator.estimate , method("`smethod'") pq(`pq')
+				*flag for mi dataset
 				quiet: mi query
-				if "`r(style)'"!="" {
-					local mipre = "mi passive:"
-					mi register passive xcons
-				}
-				*build aggregates; but replace with originals if available
-				quiet: `mipre' replace xcons = xdurables
-				foreach v of varlist xfcons? xnfcons? {
-					quiet: `mipre' replace xcons = xcons + o`v' if ~missing(o`v')
-					quiet: `mipre' replace xcons = xcons + `v' if missing(o`v')
+				if "`r(style)'"!="" local mipre = "mi passive:"
+				else local mipre = ""
+				*create consumption aggregate if not done in .estimate
+				capture: confirm variable xcons
+				if _rc>0 {
+					gen xcons = .
+					if ("`mipre'"!="") mi register passive xcons
+					*build aggregates; but replace with originals if available
+					quiet: `mipre' replace xcons = xdurables
+					foreach v of varlist xfcons? xnfcons? {
+						quiet: `mipre' replace xcons = xcons + o`v' if ~missing(o`v')
+						quiet: `mipre' replace xcons = xcons + `v' if missing(o`v')
+					}
 				}
 				*cleaning
 				if ("`mipre'"!="") {
