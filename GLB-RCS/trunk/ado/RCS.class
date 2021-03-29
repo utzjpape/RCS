@@ -873,37 +873,43 @@ program define .analyze
 		capture: confirm file "`.lc_sdTemp'/simd_`v'_stats.dta"
 		if ((_rc>0) | ("`force'"!="")) {
 			quiet {
-				*prepare dataset
+				*for memory reasons, it is better to run by simulation
 				use "`.lc_sdTemp'/simd_`v'_imp.dta", clear
-				quiet: drop `sdrop'
-				quiet: merge m:1 hhid using "`.lc_sdTemp'/HHData.dta", assert(using match) keep(match) keepusing(hhsize) nogen
-				quiet summ imputation
-				local b = 10^ceil(log10(r(max)))
-				quiet: replace hhid = hhid * `b' + imputation
-				drop imputation
-				*allow different poverty lines
-				local pline = "pline"
-				if "`v'"=="llo" {
-					local pline = "pline_llo"
-					merge m:1 simulation using "`.lc_sdTemp'/`pline'.dta", nogen assert(match using) keep(match) keepusing("`pline'*")
-				}
-				*calculate FGT
-				sort simulation est
-				quiet forvalues i = 1/100 {
-					gen x_fgt0_i`i' = est < ``pline'`i''  if ~missing(est)
-					gen x_fgt1_i`i' = max(``pline'`i'' - est,0) / ``pline'`i'' if ~missing(est)
-					gen x_fgt2_i`i' = x_fgt1_i`i'^2 if ~missing(est)
-				}
-				*calculate gini
-				quiet: gen x_gini = .
-				quiet: levelsof simulation, local(nsim)
+				levelsof simulation, local(nsim)
 				foreach isim of local nsim {
-					quiet: fastgini est if simulation==`isim' [pweight=weight*hhsize]
-					replace x_gini = r(gini) if simulation==`isim'
+					*prepare dataset
+					use "`.lc_sdTemp'/simd_`v'_imp.dta", clear
+					keep if simulation==`isim'
+					drop `sdrop'
+					merge m:1 hhid using "`.lc_sdTemp'/HHData.dta", assert(using match) keep(match) keepusing(hhsize) nogen
+					summ imputation
+					local b = 10^ceil(log10(r(max)))
+					replace hhid = hhid * `b' + imputation
+					drop imputation
+					*allow different poverty lines
+					local pline = "pline"
+					if "`v'"=="llo" {
+						local pline = "pline_llo"
+						merge m:1 simulation using "`.lc_sdTemp'/`pline'.dta", nogen assert(match using) keep(match) keepusing("`pline'*")
+					}
+					*calculate FGT
+					sort simulation est
+					forvalues i = 1/100 {
+						gen x_fgt0_i`i' = est < ``pline'`i''  if ~missing(est)
+						gen x_fgt1_i`i' = max(``pline'`i'' - est,0) / ``pline'`i'' if ~missing(est)
+						gen x_fgt2_i`i' = x_fgt1_i`i'^2 if ~missing(est)
+					}
+					*calculate gini (note that this always needs to be done by simulation)
+					quiet: fastgini est [pweight=weight*hhsize]
+					gen x_gini = r(gini)
+					*summarize
+					collapse (mean) x_* [pweight=weight*hhsize], by(simulation)
+					if `isim'==1 save "`.lc_sdTemp'/simd_`v'_stats.dta", replace
+					else {
+						append using "`.lc_sdTemp'/simd_`v'_stats.dta"
+						save "`.lc_sdTemp'/simd_`v'_stats.dta", replace
+					}
 				}
-				*summarize
-				collapse (mean) x_* [pweight=weight*hhsize], by(simulation)
-				save "`.lc_sdTemp'/simd_`v'_stats.dta", replace
 				capture: erase "`.lc_sdTemp'/simd_`v'_pstats.dta"
 			}
 		}
