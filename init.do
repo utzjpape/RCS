@@ -11,6 +11,7 @@ set seed 23081980
 set sortseed 11041955
 set maxiter 100
 
+version 14.2
 
 if (inlist("${suser}","wb390290","WB390290")) {
 	*Utz
@@ -23,9 +24,9 @@ if (inlist("${suser}","wb390290","WB390290")) {
 	} 
 	else {
 		*Local directory of your checked out copy of the code
-		local swdLocal = "C:\Users\WB390290\OneDrive - WBG\Home\Research\RCS\SV-Analysis"
+		local swdLocal = "C:\Users\wb390290\OneDrive - WBG\Home\Research\RCS\SV-Analysis"
 		*Box directory where the Data folder can be located
-		local swdBox = "C:\Users\WB390290\OneDrive - WBG\Home\Research\RCS\Sh-RCS\DataBox"
+		local swdBox = "C:\Users\wb390290\OneDrive - WBG\Home\Research\RCS\Sh-RCS\DataBox"
 	}
 }
 *Aroob
