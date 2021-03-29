@@ -56,7 +56,7 @@ program define callRCS
 		.r.mask
 		.r.estimate , lmethod("mi_2cel swift2") nmi(`nmi')
 	}
-	.r.collate , force
+	.r.collate
 	.r.analyze , force
 	gen kc = `kc'
 	label var kc "Parameter: number of core items"
@@ -71,11 +71,13 @@ end
 local lc = "0 1 3 5 10 20"
 local lm = "2 4 6 8 10 12 15 20 25 30 40 50"
 *run for best method over different number of modules and core
-forvalues t = 0/1 {
+*forvalues t = 0/1 {
+local t = 1
 	*determine whether we use a 2005 for training and run imputations on 2015
-	foreach kc of local lc {
+*	foreach kc of local lc {
+local kc = 0
 		foreach km of local lm {
 			callRCS using "`using`t''",t(`t') kc(`kc') km(`km')
 		}
-	}
-}
+*	}
+*}
