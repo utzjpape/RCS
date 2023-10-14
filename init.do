@@ -19,14 +19,10 @@ if ("${suser}"=="wb390290") {
 		set maxvar 120000
 		*on virtual machine
 		local swdLocal = "D:/wb390290/RCS"
-		*Box directory where the Data folder can be located
-		local swdBox = "`swdLocal'/DataBox"
 	} 
 	else {
 		*Local directory of your checked out copy of the code
-		local swdLocal = "C:\Users\wb390290\OneDrive - WBG\Home\Research\RCS\SV-Analysis"
-		*Box directory where the Data folder can be located
-		local swdBox = "C:\Users\wb390290\OneDrive - WBG\Home\Research\RCS\Sh-RCS\DataBox"
+		local swdLocal = "C:\Users\WB390290\OneDrive - WBG\Home\Research\RCS\Analysis"
 	}
 }
 else {
@@ -39,7 +35,7 @@ global gsdData = "`swdLocal'/Data"
 global gsdDo = "`swdLocal'/Do"
 global gsdTemp = "`swdLocal'/Temp"
 global gsdOutput = "`swdLocal'/Output"
-global gsdDataBox = "`swdBox'"
+global gsdDataBox = "`swdLocal'/DataBox"
 *add ado path
 adopath ++ "${gsdDo}/ado"
 
