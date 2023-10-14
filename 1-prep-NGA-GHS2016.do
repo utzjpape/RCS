@@ -1,18 +1,12 @@
-*Author: Syedah Aroob Iqbal
-*Reivewer: lparisotto
+*preparing GHS from Nigeria 2016
 
-
-clear all
 ma drop all
 set more off
-set matsize 10000
-set seed 10051990
-	
+set seed 23081980
+
 *data directory
 local sData = "${gsdDataBox}/NGA-GHS2016"
 	
-	
-run "${gsdDo}/fRCS.do"
 *Calculating hhsize:
 use "`sData'/sect1_harvestw3.dta", clear
 *Drop individuals who are not living in the household.
@@ -96,18 +90,4 @@ ren (item_cd value) (nonfoodid xnonfood)
 fItems2RCS, hhid(hhid) itemid(nonfoodid) value(xnonfood)
 save "${gsdTemp}/NGA-HHNonFoodItems.dta", replace
 merge 1:1 hhid using "${gsdTemp}/NGA-HHFoodItems.dta",  keepusing(xfood*) keep(match) nogen
-save "${gsdData}/NGA-HHData.dta", replace
-
-local using= "${gsdData}/NGA-HHData.dta"
-local nmodules = 4
-local ncoref = 33
-local ncorenf = 25
-local ndiff= 3
-local nsim = 20
-local nmi = 20
-local rseed = 23081980
-local dirbase = "${gsdOutput}"
-
-
-
-RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') `egalshare'
+save "${gsdData}/NGA-GHS2016-HHData.dta", replace

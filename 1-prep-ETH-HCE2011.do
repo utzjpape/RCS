@@ -1,25 +1,12 @@
+*prepare ETH HCE dataset
 
-clear all
 ma drop all
 set more off
-set matsize 10000
-set seed 10051990
+set seed 23081980
 
 *data directory
 local sData = "${gsdDataBox}/ETH-HCE2011"
 
-*parameters
-*number of modules
-local M = 6
-*number of simulations
-local N = 20
-*number of imputations 
-local nI = 20
-*number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
-local ndiff = 3
-	
-
-run "${gsdDo}/fRCS.do"
 use "`sData'/2011 HCE aggregate .dta", clear 
 drop if missing(uhhid)
 save "${gsdTemp}/2011_HCE_aggregate_formerge.dta", replace
@@ -50,18 +37,5 @@ ren (item value) (nonfoodid xnonfood)
 fItems2RCS, hhid(hhid) itemid(nonfoodid) value(xnonfood)
 save "${gsdTemp}/ETH-HHNonFoodItems.dta", replace
 merge 1:1 hhid using "${gsdTemp}/ETH-HHFoodItems.dta",  keepusing(xfood*) keep(match) nogen
-save "${gsdData}/ETH-HHData.dta", replace
-
-local using= "${gsdData}/ETH-HHData.dta"
-local nmodules = 6
-local ncoref = 33
-local ncorenf = 25
-local ndiff= 3
-local nsim = 20
-local nmi = 20
-local rseed = 23081980
-local dirbase = "${gsdOutput}"
-
-
-
-RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff') `egalshare'
+compress
+save "${gsdData}/ETH-HCE2011-HHData.dta", replace

@@ -1,8 +1,8 @@
-*SIMULATE PARTIAL SURVEYS FOR HERGAISA
+*Prepare South Sudan dataset
 
-clear all
 ma drop all
 set more off
+set seed 23081980
 
 *parameters
 *data directory
@@ -14,8 +14,6 @@ local sData = "${gsdDataBox}/SSD-NBHS2009"
 * In 2008 terms, this is 3.63/100*69.12 = 2.51 SSP/d
 * For a month, this is 2.51 * 365.25 / 12 = 76.4 SSP/m
 local xpovline = 2.51 * 365.25 / 12 
-
-include "${gsdDo}/fRCS.do"
 
 *get laspeyres
 use "`sData'/NBHS_IND.dta", clear
@@ -31,7 +29,7 @@ use "`sData'/NBHS_FOOD.dta", clear
 ren (item value) (foodid xfood)
 merge m:1 hhid using "${gsdTemp}/SSD-Deflator.dta", assert(match) keepusing(laspeyres)
 replace xfood = xfood /7 * 365.25 / 12 / laspeyres
-quiet: include "${gsdDo}/SSD-labels.do"
+quiet: include "`sData'/SSD-labels.do"
 label values foodid lfoodid
 keep hhid foodid xfood
 fItems2RCS, hhid(hhid) itemid(foodid) value(xfood)
@@ -42,7 +40,7 @@ ren (item q3) (nonfoodid xnonfood)
 replace nonfoodid = 83003 if nonfoodid==830031
 merge m:1 hhid using "${gsdTemp}/SSD-Deflator.dta", assert(match) keepusing(laspeyres)
 replace xnonfood = xnonfood / laspeyres
-quiet: include "${gsdDo}/SSD-labels.do"
+quiet: include "`sData'/SSD-labels.do"
 label values nonfoodid lnonfoodid
 *module=5 implies 12m recall; module=4 is a 30d recall
 replace xnonfood = xnonfood / 12 if module==5
@@ -108,30 +106,12 @@ merge 1:1 hhid using "${gsdTemp}/SSD-HH-FoodItems.dta", nogen keep(match) keepus
 merge 1:1 hhid using "${gsdTemp}/SSD-HH-NonFoodItems.dta", nogen keep(match) keepusing(xnonfood*)
 gen pchild = nchild / hhsize
 gen psenior = nsenior / hhsize
-save "${gsdData}/SSD-HHData.dta", replace
+save "${gsdData}/SSD-NBHS2009-HHData.dta", replace
 
-*START RCS code
-*number of modules
-local nmodules = 4
-*number of simulations
-local nsim = 20
-*number of imputations 
-local nmi = 50
-*number of different items per module (the lower the more equal shares per module): >=1 (std: 2)
-local ndiff = 3
-local using= "${gsdData}/SSD-HHData.dta"
-local dirbase = "${gsdOutput}/SSD-d`ndiff'm`nmodules'"
-local ncoref = 33
-local ncorenf = 25
-local ndiff=`ndiff'
-local povline = `xpovline'
-local lmethod = "med avg reg tobit mi_ce"
-local rseed = 23081980
-local prob = 1
-local model = "hhsize pchild psenior i.hhsex i.hhwater i.hhcook hhsleep i.hhhouse i.hhtoilet i.hhwaste i.strata"
+*local model = "hhsize pchild psenior i.hhsex i.hhwater i.hhcook hhsleep i.hhhouse i.hhtoilet i.hhwaste i.strata"
 
 *build consumption model
-use "${gsdData}/SSD-HHData.dta", clear
+use "${gsdData}/SSD-NBHS2009-HHData.dta", clear
 merge 1:1 hhid using "`sData'/NBHS_HH.dta", nogen keep(match) assert(match using) keepusing(pc*)
 egen ctf = rowtotal(xfood*)
 replace ctf = ctf / hhsize
@@ -145,14 +125,3 @@ mean poor [pweight=weight*hhsize]
 mean poor [pweight=weight*hhsize], over(strata)
 reg ct_pc `model'
 
-*run simulation
-include "${gsdDo}/fRCS.do"
-include "${gsdDo}/fRCS_estimate_.do"
-include "${gsdDo}/fRCS_estimate_mi_.do"
-
-*RCS_run using "`lc_sdTemp'/HHData.dta", dirbase("${l_sdOut}") nmodules(`M') ncoref(33) ncorenf(25) ndiff(`ndiff') nsim(`N') nmi(`nI') lmethod("`lmethod'") povline(`povline') model("`model'")
-RCS_prepare using "`using'", dirbase("`dirbase'") nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') ndiff(`ndiff')
-RCS_assign using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') rseed(`rseed') p(`prob')
-RCS_simulate using "`using'", dirbase("`dirbase'") nmodules(`nmodules') nsim(`nsim') nmi(`nmi') lmethod("`lmethod'") model("`model'") rseed(`rseed')
-RCS_collate using "`using'", dirbase("`dirbase'") nsim(`nsim') nmi(`nmi') lmethod("`lmethod'")
-RCS_analyze using "`using'", dirbase("`dirbase'") lmethod("`lmethod'") povline(`povline')

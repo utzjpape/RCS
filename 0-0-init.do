@@ -30,7 +30,10 @@ else {
 	error 1
 }
 
+*packages
+*ssc install labutil
 
+*prepare directories
 global gsdData = "`swdLocal'/Data"
 global gsdDo = "`swdLocal'/Do"
 global gsdTemp = "`swdLocal'/Temp"
