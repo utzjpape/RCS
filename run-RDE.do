@@ -1,13 +1,12 @@
 *run analysis for RDE submission
 
-if "${gsdzDo}"=="" {
+if "${gsdDo}"=="" {
 	di as error "run init.do first
 	error 1
 }
 
 *run for Kenya
-run "${gsdDo}/prep-KEN-KIHBS2005.do"
-run "${gsdDo}/prep-KEN-KIHBS2015.do"
+run "${gsdDo}/prep-KEN-KIHBS.do"
 *should be run on server
 run "${gsdDo}/RCS-KEN-0-simulate.do"
 run "${gsdDo}/RCS-KEN-1-collate.do"

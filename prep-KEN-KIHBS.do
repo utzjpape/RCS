@@ -1,4 +1,4 @@
-*Prepare Kenya unified KIHBS data
+*Prepare Kenya unified KIHBS data, including 2005, 2015P and 2015C
 
 ma drop all
 set more off
@@ -6,12 +6,12 @@ set seed 23081980
 
 *parameters
 *data directory
-local sData = "${gsdDataBox}/KEN-KIHBS2015"
+local sData = "${gsdDataBox}/KEN-KIHBS"
 
 *adjust capi pilot for smaller core
 use "`sData'/fcons-unified.dta", clear
 label copy litemid lfood
-label save lfood using "${gsdData}/KEN-KIHBS_food-label.do" , replace
+label save lfood using "`sData'/KEN-KIHBS_food-label.do" , replace
 merge m:1 survey clid hhid using "`sData'/hh-unified.dta", nogen assert(match using) keep(match) keepusing(hhmod)
 *reduce number of core items to become more realistic
 sort itemid
@@ -29,7 +29,7 @@ save "`ff'", replace
 *non-food
 use "`sData'/nfcons-unified.dta", clear
 label copy litemid lnonfood
-label save lnonfood using "${gsdData}/KEN-KIHBS_nonfood-label.do" , replace
+label save lnonfood using "`sData'/KEN-KIHBS_nonfood-label.do" , replace
 merge m:1 survey clid hhid using "`sData'/hh-unified.dta", nogen assert(match using) keep(match) keepusing(hhmod)
 sort itemid
 replace mod_item = -1 if mod_item==0 & !inlist(itemid,3206,2001,5507,3509,3026) & (survey==3)
@@ -100,7 +100,8 @@ forvalues i = 1/3 {
 	if `i'==3 local hhmod = "hhmod xfcons* xnfcons*"
 	else local hhmod = ""
 	keep clid urban uid county weight hh* rooms ownhouse wall roof floor impwater impsan elec_acc depen_cat nchild pchild nadult padult nsenior psenior literacy malehead ageheadg hhedu hhh_empstat asset_index xfood* xnonfood* `hhmod'
-	ren (uid clid county asset_index) (hhid cluster strata assets)
+	ren (clid county asset_index) (cluster strata assets)
+	drop uid
 	ren (rooms ownhouse impwater impsan elec_acc nchild pchild nadult padult nsenior psenior literacy assets) mcon_=
 	ren (wall roof floor depen_cat malehead ageheadg hhedu hhh_empstat) mcat_=
 	xtile mcat_rooms = mcon_rooms [pweight=weight], n(4)
