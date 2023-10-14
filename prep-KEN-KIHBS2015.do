@@ -6,7 +6,7 @@ set seed 23081980
 
 *parameters
 *data directory
-local sData = "${gsdDataBox}/KEN-KIHBS"
+local sData = "${gsdDataBox}/KEN-KIHBS2015"
 
 *adjust capi pilot for smaller core
 use "`sData'/fcons-unified.dta", clear
