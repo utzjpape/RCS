@@ -47,22 +47,25 @@ foreach sd of local ldata {
 			local lmethod = "mi_2cel"
 			local dirbase = "${gsdOutput}/`sd'-c`kc'-m`km'-t`t'"
 			local using = "${gsdData}/`sd'-HHData.dta"
-			*create instance to run RCS simulations
-			capture classutil drop .r
-			.r = .RCS.new
-			.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim') train(`t')
-			.r.mask
-			.r.estimate , lmethod("`lmethod'") nmi(`nmi')
-			.r.collate
-			.r.analyze , force
-			gen kc = `kc'
-			label var kc "Parameter: number of core items"
-			gen km = `km'
-			label var km "Parameter: number of modules"
-			gen t = `t'
-			label var t "Used training set"
-			save "`dirbase'.dta", replace
-			.r.cleanup
+			capture confirm file "`dirbase'.dta"
+			if _rc != 0 {
+				*create instance to run RCS simulations
+				capture classutil drop .r
+				.r = .RCS.new
+				.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim') train(`t')
+				.r.mask
+				.r.estimate , lmethod("`lmethod'") nmi(`nmi')
+				.r.collate
+				.r.analyze , force
+				gen kc = `kc'
+				label var kc "Parameter: number of core items"
+				gen km = `km'
+				label var km "Parameter: number of modules"
+				gen t = `t'
+				label var t "Used training set"
+				save "`dirbase'.dta", replace
+				.r.cleanup
+			}
 		}
 	}
 }
