@@ -1050,6 +1050,15 @@ program define .analyze
 	quiet merge m:1 nmod using "`.lc_sdTemp'/tstats.dta", nogen
 end
 
+*cleans up the large temp folder
+program define .cleanup
+	syntax
+	*delete temp files
+	shell rmdir "`.lc_sdTemp'" /s /q
+	*reset status
+	.status = 0
+end	
+
 program define .run
 	syntax using/, dirbase(string) nmodules(integer) ncoref(integer) ncorenf(integer) nsim(integer) nmi(integer) lmethod(namelist) [force erase train(integer 0) shares(string) rseed(integer 230880) Prob(real 1.0)]
 	.prepare using "`using'", dirbase("`dirbase'") nsim(`nsim') nmodules(`nmodules') ncoref(`ncoref') ncorenf(`ncorenf') train(`train') shares("`shares'") rseed(`rseed') `force' `erase'
