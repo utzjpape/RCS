@@ -63,11 +63,9 @@ if check==0 {
 		display "No action needed"
 }
 else {
-	mkdir "${gsdData}"
+	capture: mkdir "${gsdData}"
 	mkdir "${gsdTemp}"
-	mkdir "${gsdOutput}"
-	
-	*install packages used in the process
+	mkdir "${gsdOutput}"	
 }
 
 *define functions needed
