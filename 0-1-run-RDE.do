@@ -6,11 +6,13 @@ if "${gsdDo}"=="" {
 }
 
 *prepare datasets
-local ldata = "KEN-KIHBS NGA-GHS2016 PAK-HIES2015 SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009 "
+local ldata = "KEN-KIHBS NGA-GHS PAK-HIES2015 SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009 "
 foreach sdata of local ldata {
 	di "Preparing dataset for `sdata'..."
 	run "${gsdDo}/1-prep-`sdata'.do"
 }
+*combine datasets for training for surveys with two timepoints
+
 
 *test run
 local ldata = "KEN-KIHBS2005P KEN-KIHBS2015P NGA-GHS2016 NGA-GHS2019 PAK-HIES2015 SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009"
@@ -31,3 +33,11 @@ foreach sdata of local ldata {
 *can be run on local machine
 *run "${gsdDo}/RCS-KEN-2-analysis-2015P.do"
 *run "${gsdDo}/RCS-KEN-2-analysis-2015C.do"
+
+
+if inlist("`sd'","KEN-KIHBS","NGA-GHS") {
+	local using = "`sd'201"
+}
+else {
+	local using = "`sd'"
+}

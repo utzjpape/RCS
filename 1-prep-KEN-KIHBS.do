@@ -5,12 +5,9 @@ set more off
 set seed 23081980
 
 *run if any file is missing
-local sf = "${gsdData}/KEN-KIHBS2005P-HHData.dta"
+local sf = "${gsdData}/KEN-KIHBS-HHData.dta"
 capture confirm file "`sf'"
 local rc = abs(_rc)
-local sf = "${gsdData}/KEN-KIHBS2015P-HHData.dta"
-capture confirm file "`sf'"
-local rc = `rc' + abs(_rc)
 local sf = "${gsdData}/KEN-KIHBS2015C-HHData.dta"
 capture confirm file "`sf'"
 local rc = `rc' + abs(_rc)
@@ -118,9 +115,17 @@ if _rc != 0 {
 		xtile mcat_passets = mcon_assets [pweight=weight], n(4)
 		gen xdurables = 0
 		order hhid strata urban cluster weight hhsize mcon_* mcat_* `hhmod' xdurables xfood* xnonfood*, first
-		if (`i'<3) drop hhmod
-		compress
-		save "${gsdData}/KEN-KIHBS`s'-HHData.dta", replace
+		if (`i'<3) {
+			drop hhmod
+			keep hhid strata urban cluster weight hhsize mcon_* mcat_* xdurables xfood* xnonfood*
+			order hhid strata urban cluster weight hhsize mcon_* mcat_* xdurables xfood* xnonfood*, first
+			compress
+			save "${gsdTemp}/KEN-KIHBS`s'-HHData.dta", replace
+		}
+		else {
+			compress
+			save "${gsdData}/KEN-KIHBS`s'-HHData.dta", replace
+		}
 
 		*produce reduced dataset
 	*	gen r = runiform()
@@ -130,4 +135,10 @@ if _rc != 0 {
 	*	compress
 	*	save "${gsdData}/KEN-KIHBS`s'-HHDatared.dta", replace
 	}
+
+	*prepare combined dataset with training data
+	use "${gsdTemp}/KEN-KIHBS2015P-HHData.dta", clear
+	append using "${gsdTemp}/KEN-KIHBS2005P-HHData.dta", gen(train)
+	save "${gsdData}/KEN-KIHBS-HHData.dta", replace
 }
+
