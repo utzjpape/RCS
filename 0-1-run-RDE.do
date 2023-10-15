@@ -13,7 +13,7 @@ foreach sdata of local ldata {
 }
 
 *test run
-local ldata = "KEN-KIHBS2005P KEN-KIHBS2015P NGA-GHS2016 PAK-HIES2015 SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009"
+local ldata = "KEN-KIHBS2005P KEN-KIHBS2015P NGA-GHS2016 NGA-GHS2019 PAK-HIES2015 SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009"
 foreach sdata of local ldata {
 	di "Test run for `sdata'..."
 	*capture classutil drop .r
