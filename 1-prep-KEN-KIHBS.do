@@ -11,7 +11,7 @@ local rc = abs(_rc)
 local sf = "${gsdData}/KEN-KIHBS2015C-HHData.dta"
 capture confirm file "`sf'"
 local rc = `rc' + abs(_rc)
-if _rc != 0 {
+if `rc' != 0 {
 	*data directory
 	local sData = "${gsdDataBox}/KEN-KIHBS"
 
@@ -107,6 +107,8 @@ if _rc != 0 {
 		if `i'==3 local hhmod = "hhmod xfcons* xnfcons*"
 		else local hhmod = ""
 		keep clid urban uid county weight hh* rooms ownhouse wall roof floor impwater impsan elec_acc depen_cat nchild pchild nadult padult nsenior psenior literacy malehead ageheadg hhedu hhh_empstat asset_index xfood* xnonfood* `hhmod'
+		*drop food item not consistent across surveys (also extremely low consumption)
+		capture: drop xfood604
 		ren (clid county asset_index) (cluster strata assets)
 		drop uid
 		ren (rooms ownhouse impwater impsan elec_acc nchild pchild nadult padult nsenior psenior literacy assets) mcon_=
