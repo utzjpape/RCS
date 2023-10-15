@@ -31,7 +31,14 @@ else {
 }
 
 *packages
-*ssc install labutil
+local lp = "labmask vselect dirlist esttab fastgini"
+foreach p of local lp {
+	capture : which `p'
+	if (_rc) {
+		display as result in smcl `"Please install command {it:`p'}."'
+		exit 199
+	}
+}
 
 *prepare directories
 global gsdData = "`swdLocal'/Data"

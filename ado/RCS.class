@@ -100,6 +100,36 @@ program .prepare
 	capture confirm file "`.lc_sdTemp'/HHData.dta"
 	if ((_rc>0) | ("`force'"!="")) {
 		use "`using'", clear
+		*check whether variables exist and are non-missing
+		local lv = "hhid strata urban cluster weight hhsize xdurables"
+		foreach v of local lv {
+			capture: assert !missing(`v')
+			if _rc == 9 {
+				di as error "RCS.prepare: ensure that variable `v' has no missing values."
+				error _rc
+			}
+			else if _rc ==111 {
+				di as error "RCS.prepare: ensure that variable `v' exists."
+				error _rc
+			}
+		}
+		local lsv = "mcon_* mcat_* xfood* xnonfood*"
+		foreach sv of local lsv {
+			capture: desc `sv', varlist
+			if _rc == 111 {
+				di as error "RCS.prepare: ensure that at least 1 variable `sv' exists."
+				error _rc
+			}
+			
+			local lv = r(varlist)
+			foreach v of local lv {
+				capture: assert !missing(`v')
+				if _rc == 9 {
+					di as error "RCS.prepare: ensure that variable `v' has no missing values."
+					error _rc
+				}
+			}
+		}
 		*make hhid sequential
 		sort hhid
 		egen hhidx = seq()

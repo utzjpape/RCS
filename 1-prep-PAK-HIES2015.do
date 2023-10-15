@@ -29,9 +29,20 @@ if _rc != 0 {
 	drop ctf ctnf ccons
 	compress
 	gen xdurables = 0
+	drop strata
+	ren mcat_province strata
 	order hhid strata urban cluster weight hhsize xdurables mcat* mcon*
 	destring strata, replace
 	destring hhid, replace
+	keep hhid strata urban cluster weight hhsize mcon_* mcat_* xdurables xfood* xnonfood*
+	order hhid strata urban cluster weight hhsize mcon_* mcat_* xdurables xfood* xnonfood*, first
+	*ensure no missing values
+	desc, varl
+	local lv = r(varlist)
+	foreach v of local lv {
+		assert !missing(`v')
+	}
+	compress
 	save "`using'", replace
 }
 
