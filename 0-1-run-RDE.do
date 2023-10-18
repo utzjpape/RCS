@@ -55,7 +55,7 @@ foreach sd of local ldata {
 				*create instance to run RCS simulations
 				capture classutil drop .r
 				.r = .RCS.new
-				.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim') train(`train')
+				.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim') train(`train') erase
 				.r.mask
 				.r.estimate , lmethod("`lmethod'") nmi(`nmi')
 				.r.collate
