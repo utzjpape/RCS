@@ -5,6 +5,7 @@ class RCS {
 	string dirbase
 	string lc_sdTemp
 	string lc_sdOut
+	string sdTemp
 	*use status to ensure class is executed in right sequence:
 	* 1 prepared
 	* 2 masked
@@ -42,9 +43,9 @@ program .new
 		exit 199
 	}
 	*work in temp directory, essential for parallel execution of mi commands
-	tempfile sdtemp
-	mkdir "`sdtemp'"
-	.sdtemp = "`sdtemp'"
+	tempfile sdTemp
+	mkdir "`sdTemp'"
+	.sdTemp = "`sdTemp'"
 	quiet: cd "`.sdTemp'"
 end
 program define .fse, rclass
