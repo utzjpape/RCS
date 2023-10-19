@@ -33,7 +33,7 @@ local ldata = "KEN-KIHBS NGA-GHS PAK-HIES2015 SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS
 local ldata = "KEN-KIHBS NGA-GHS SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009"
 foreach sd of local ldata {
 	*indicate existence of training dataset 
-	local lc = "0 1 3 5 10 20"
+	local lc = "0 5 10"
 	*run for best method over different number of modules and core
 	foreach kc of local lc {
 		*local sd = ""
