@@ -5,7 +5,6 @@ class RCS {
 	string dirbase
 	string lc_sdTemp
 	string lc_sdOut
-	string sdTemp
 	*use status to ensure class is executed in right sequence:
 	* 1 prepared
 	* 2 masked
@@ -42,11 +41,6 @@ program .new
 		display as result in smcl `"Please install package {it:fastgini} from SSC in order to run this do-file;"' _newline `"you can do so by clicking this link: {stata "ssc install fastgini":auto-install fastgini}"'
 		exit 199
 	}
-	*work in temp directory, essential for parallel execution of mi commands
-	tempfile sdTemp
-	mkdir "`sdTemp'"
-	.sdTemp = "`sdTemp'"
-	quiet: cd "`.sdTemp'"
 end
 program define .fse, rclass
 	args vref vest
@@ -698,7 +692,7 @@ program define .estimate
 	file write fhm "`.estimator.model'" _n "`.estimator.logmodel'"
 	file close fhm
 	*change to temp directory for mi commands
-	quiet: cd "`.sdTemp'"
+	quiet: cd "`.lc_sdTemp'"
 	*start iteration over simulations
 	forvalues isim = 1 / `.nsim' {
 		di "Entering simulation `isim':"
@@ -767,7 +761,7 @@ program define .collate
 	}
 
 	*change to temp directory for mi commands
-	quiet: cd "`.sdTemp'"
+	quiet: cd "`.lc_sdTemp'"
 	*extract detailed results from estimation
 	foreach smethod in `.lmethod' {
 		di "Extracting for `smethod':"
