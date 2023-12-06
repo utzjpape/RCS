@@ -4,7 +4,7 @@ set maxiter 100
 
 capture confirm file "${gsdData}/KEN-KIHBS2015C-HHData.dta"
 if _rc != 0 {
-	quiet: do "${gsdDo}/prep-KEN-KIHBS.do"
+	quiet: do "${gsdDo}/1-prep-KEN-KIHBS.do"
 }
 
 local mi = 50
@@ -16,12 +16,14 @@ local lfood = "food nonfood"
 local ly = "2005 2015"
 foreach sf of local lfood {
 	foreach y of local ly {
-		use "${gsdData}/KEN-KIHBS`y'P-HHData.dta", clear
-		keep hhid weight x`sf'*
-		reshape long x`sf', i(hhid weight) j(itemid)
+		use "${gsdData}/KEN-KIHBS-HHData.dta", clear
+		keep if train == (`y'==2005)
+		local hhid = "hhid strata urban cluster"
+		keep `hhid' weight x`sf'*
+		reshape long x`sf', i(`hhid' weight) j(itemid)
 		ren x`sf' x
 		replace x = 0 if mi(x)
-		bysort hhid: egen xt = total(x)
+		bysort `hhid': egen xt = total(x)
 		gen px = x/xt
 		replace px = 0 if mi(px)
 		collapse (mean) px [pweight=weight], by(itemid)
@@ -29,7 +31,7 @@ foreach sf of local lfood {
 		egen r = seq()
 		ren px px`y'
 		cap label drop l`sf'
-		run "${gsdData}/KEN-KIHBS_`sf'-label.do"
+		run "${gsdDataBox}/KEN-KIHBS/KEN-KIHBS_`sf'-label.do"
 		label val itemid l`sf'
 		save "${gsdTemp}/`sf'-shares_`y'.dta", replace
 	}
@@ -45,7 +47,9 @@ foreach sf of local lfood {
 * BALANCE TESTS FOR 2015/16 PAPI AND CAPI
 ******************************************
 *balance tests for household characteristics
-use "${gsdData}/KEN-KIHBS2015P-HHData.dta", clear
+use "${gsdData}/KEN-KIHBS-HHData.dta", clear
+version 16
+keep if train==0
 append using "${gsdData}/KEN-KIHBS2015C-HHData.dta", gen(survey)
 svyset cluster [pweight = weight], strata(strata) singleunit(centered)
 unab xcon : mcon*
@@ -63,6 +67,7 @@ foreach v of local vars {
 	scalar diff = me1 - me0
 	scalar se0 = SE[1,1]^(1/2)
 	scalar se1 = SE[2,2]^(1/2)
+	*next line doesn't seem to work anymore in Stata 18
 	test [`v']0 = [`v']1
 	local star =""
 	if r(p) <= .1 local star = "`star'*"
@@ -86,6 +91,11 @@ tab hhmod
 eststo clear
 capture confirm file "${gsdOutput}/KEN-KIHBS_cmp.dta"
 if _rc != 0 {
+	use "${gsdData}/KEN-KIHBS-HHData.dta", replace
+	keep if train==0
+	save "${gsdData}/KEN-KIHBS2015P-HHData.dta", replace
+	
+	local hhid = "hhid strata urban cluster"
 	*get poverty lines from 2015 PAPI dataset
 	use "${gsdData}/KEN-KIHBS2015P-HHData.dta", clear
 	egen xcons = rowtotal(xfood* xnonfood*)
@@ -130,7 +140,7 @@ if _rc != 0 {
 	*create class for model selection and estimation
 	capture classutil drop .re
 	.re = .RCS_estimator.new
-	.re.prepare , hhid("hhid") weight("weight") hhmod("hhmod") cluster("cluster") xfcons("xfcons") xnfcons("xnfcons") nmi(`mi')
+	.re.prepare , hhid("`hhid'") weight("weight") hhmod("hhmod") cluster("cluster") xfcons("xfcons") xnfcons("xnfcons") nmi(50)
 	.re.select_model hhsize urban `mcon' `mcat', model("`model'") logmodel("`logmodel'") method("forward aicc")
 	*save model for next use
 	capture file close fhm
@@ -148,12 +158,12 @@ if _rc != 0 {
 	*cleaning
 	mi register imputed xcons
 	mi update
-	merge 1:1 hhid using "${gsdData}/KEN-KIHBS2015C-HHData.dta", assert(match) nogen keepusing(strata urban cluster weight hhsize hhmod)
+	merge 1:1 `hhid' using "${gsdData}/KEN-KIHBS2015C-HHData.dta", assert(match) nogen keepusing(strata urban cluster weight hhsize hhmod)
 	ren _*_xcons xcons*
 	mi unset
-	keep hhid strata urban cluster weight hhsize xcons*
+	keep `hhid' strata urban cluster weight hhsize xcons*
 	drop xcons_* xcons
-	reshape long xcons, i(hhid strata urban cluster weight hhsize) j(mi)
+	reshape long xcons, i(`hhid' strata urban cluster weight hhsize) j(mi)
 	quiet forvalues i = 1/100 {
 		gen rcs_fgt0_i`i' = xcons < `pline`i''
 		gen rcs_fgt1_i`i' = max(`pline`i'' - xcons,0) / `pline`i''
@@ -173,7 +183,7 @@ if _rc != 0 {
 	*get simplified aggregate without imputations
 	use "${gsdData}/KEN-KIHBS2015C-HHData.dta", clear
 	egen xcons = rowtotal(xfcons? xnfcons?)
-	keep hhid xcons weight hhsize
+	keep `hhid' xcons weight hhsize
 	quiet forvalues i = 1/100 {
 		*for reference
 		gen red_fgt0_i`i' = xcons < `pline`i''
@@ -192,7 +202,9 @@ if _rc != 0 {
 	save "`fred'", replace
 	
 	*add swift consumption distribution with and without MI
-	use "${gsdData}/KEN-KIHBS2005P-HHData.dta", clear
+	use "${gsdData}/KEN-KIHBS-HHData.dta", clear
+	keep if train==1
+	drop train
 	egen xcons = rowtotal(xfood* xnonfood*)
 	append using "${gsdData}/KEN-KIHBS2015P-HHData.dta", gen(test)
 	drop xfood* xnonfood*
@@ -228,12 +240,12 @@ if _rc != 0 {
 	mi register imputed logmodel
 	mi register regular `logmodel'
 	*run ols or truncated regression
-	mi impute regress logmodel = `logmodel', add(`mi')
+	mi impute regress logmodel = `logmodel', add(50)
 	ren _*_logmodel icons*
 	mi unset
 	keep if test
-	keep hhid strata urban cluster weight hhsize icons*
-	reshape long icons, i(hhid strata urban cluster weight hhsize) j(mi)
+	keep `hhid' strata urban cluster weight hhsize icons*
+	reshape long icons, i(`hhid' strata urban cluster weight hhsize) j(mi)
 	replace icons = exp(icons)
 	quiet forvalues i = 1/100 {
 		gen swi_fgt0_i`i' = icons < `pline`i''

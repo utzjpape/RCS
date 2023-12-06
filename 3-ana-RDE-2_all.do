@@ -1,15 +1,13 @@
-*runs the analysis on the results files from the simulation
+if "${gsdDo}"=="" {
+	di as error "0-0-run init.do first
+	error 1
+}
+
 version 14.2
 
 *check whether files have been creates
-local res0= "${gsdOutput}/RDE-results_ken0.dta"
-local res1= "${gsdOutput}/RDE-results_ken1.dta"
-capture confirm file "`res0'"
-if _rc != 0 {
-	di as error "Please run 2-sim-RDE.do first to create the result files."
-	error 1
-}
-capture confirm file "`res1'"
+local res= "${gsdOutput}/RDE-results_all.dta"
+capture confirm file "`res'"
 if _rc != 0 {
 	di as error "Please run 2-sim-RDE.do first to create the result files."
 	error 1

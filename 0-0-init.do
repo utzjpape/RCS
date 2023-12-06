@@ -31,7 +31,7 @@ else {
 }
 
 *packages
-local lp = "labmask vselect dirlist esttab fastgini"
+local lp = "labmask vselect dirlist esttab fastgini grc1leg balancetable"
 foreach p of local lp {
 	capture : which `p'
 	if (_rc) {
@@ -39,6 +39,9 @@ foreach p of local lp {
 		exit 199
 	}
 }
+
+*datasets to use
+local ldata = "KEN-KIHBS NGA-GHS SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009"
 
 *prepare directories
 global gsdData = "`swdLocal'/Data"
