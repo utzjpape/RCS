@@ -695,7 +695,7 @@ program define .estimate
 	quiet: cd "`.lc_sdTemp'"
 	*start iteration over simulations
 	forvalues isim = 1 / `.nsim' {
-		di "Entering simulation `isim':"
+		di "Entering simulation `isim' ($S_DATE $S_TIME):"
 		*ESTIMATE BASED ON DIFFERENT METHODS
 		foreach smethod of local lmethod {
 			di " ... running for `smethod' ..."
