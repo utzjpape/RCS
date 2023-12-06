@@ -19,5 +19,6 @@ foreach sd of local ldata {
 run "${gsdDo}/2-sim-RDE.do"
 
 *analyze Kenya results
-run "${gsdDo}/3-ana-RDE-1_ken.do"
+run "${gsdDo}/3-ana-RDE-1_ken2015C.do"
+run "${gsdDo}/3-ana-RDE-1_ken2015P.do"
 run "${gsdDo}/3-ana-RDE-2_all.do"
