@@ -1,19 +1,20 @@
-*run analysis for RDE submission
+*run simulations for RDE submission
 
 if "${gsdDo}"=="" {
 	di as error "0-0-run init.do first
 	error 1
 }
 
-*prepare datasets
 local ldata = "KEN-KIHBS NGA-GHS PAK-HIES2015 SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009 "
+local ldata = "KEN-KIHBS NGA-GHS SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009"
+
+*prepare datasets
 foreach sd of local ldata {
 	di "Preparing dataset for `sd'..."
 	run "${gsdDo}/1-prep-`sd'.do"
 }
 
 *test run
-local ldata = "KEN-KIHBS NGA-GHS PAK-HIES2015 SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009"
 foreach sd of local ldata {
 	di "Test run for `sd'..."
 	*indicate existence of training dataset 
@@ -29,16 +30,37 @@ foreach sd of local ldata {
 }
 
 *run on server
-local ldata = "KEN-KIHBS NGA-GHS PAK-HIES2015 SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009"
-local ldata = "KEN-KIHBS NGA-GHS SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009"
+
+*collect results
+forvalues t = 0/1 {
+	clear
+	foreach kc of local lc {
+		foreach km of local lm {
+			cap: append using "${gsdOutput}/KEN-KIHBS-c`kc'-m`km'-t`t'.dta"
+			if _rc==601 di "File ${gsdOutput}/KEN-KIHBS-c`kc'-m`km'-t`t'.dta does not exist."
+		}
+	}
+	save "${gsdOutput}/KEN-KIHBS-t`t'.dta", replace
+}
+
+
+local lc_all = "0 5 10"
+local lm_all = "2 4 6 8 10"		
+local lc_ken = "0 1 3 5 10 20"
+local lm_len = "2 4 6 8 10 12 15 20 25 30 40 50"		
 foreach sd of local ldata {
-	*indicate existence of training dataset 
-	local lc = "0 1 3 5 10 20"
-	*run for best method over different number of modules and core
+	*do more detailed run for Kenya
+	if sd=="KEN-KIHBS" {
+		local lc = lc_ken
+		local lm = lm_ken		
+	}
+	else {
+		local lc = lc_all
+		local lm = lm_all		
+	}
 	foreach kc of local lc {
 		*local sd = ""
 		*local kc = 0
-		local lm = "2 4 6 8 10"
 		foreach km of local lm {
 			di "Running for `sd': kc=`kc'; km=`km'"
 			local train = inlist("`sd'","KEN-KIHBS","NGA-GHS")
@@ -74,11 +96,36 @@ foreach sd of local ldata {
 	}
 }
 
+*generate output for all countries
+clear
+foreach sd of local ldata {
+	local train = inlist("`sd'","KEN-KIHBS","NGA-GHS")
+	foreach kc of local lc_all {
+		foreach km of local lm_all {
+			local dirbase = "${gsdOutput}/`sd'-c`kc'-m`km'-t`train'"
+			cap: append using "`dirbase'.dta"
+			if _rc==601 di "File `dirbase'.dta does not exist."
+			quietly: desc
+			if r(k)==33 gen sd=""
+			quietly: replace sd = "`sd'" if sd == ""
+		}
+	}
+}
+order sd, first
+compress
+save "${gsdOutput}/RDE-results_all.dta", replace
 
-
-*should be run on server
-*run "${gsdDo}/RCS-KEN-0-simulate.do"
-*run "${gsdDo}/RCS-KEN-1-collate.do"
-*can be run on local machine
-*run "${gsdDo}/RCS-KEN-2-analysis-2015P.do"
-*run "${gsdDo}/RCS-KEN-2-analysis-2015C.do"
+*generate output for Kenya
+local sd = "KEN-KIHBS"
+forvalues train = 0/1 {
+	clear
+	foreach kc of local lc_ken {
+		foreach km of local lm_ken {
+			local dirbase = "${gsdOutput}/`sd'-c`kc'-m`km'-t`train'"
+			cap: append using "`dirbase'.dta"
+			if _rc==601 di "File `dirbase'.dta does not exist."
+		}
+	}
+	compress
+	save "${gsdOutput}/RDE-results_ken`train'.dta", replace
+}
