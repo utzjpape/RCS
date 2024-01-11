@@ -57,10 +57,15 @@ foreach sd of local ldata {
 				*create instance to run RCS simulations
 				capture classutil drop .r
 				.r = .RCS.new
+				di "... preparing ..."
 				.r.prepare using "`using'", dirbase("`dirbase'") nmodules(`km') ncoref(`kc') ncorenf(`kc') nsim(`nsim') train(`train') erase
+				di "... masking ..."
 				.r.mask
+				di "... estimating ..."
 				.r.estimate , lmethod("`lmethod'") nmi(`nmi')
+				di "... collating ..."
 				.r.collate
+				di "... analyzing ..."
 				.r.analyze , force
 				gen kc = `kc'
 				label var kc "Parameter: number of core items"
