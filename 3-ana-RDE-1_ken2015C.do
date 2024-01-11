@@ -56,6 +56,7 @@ unab xcon : mcon*
 fvunab xcat : i.mcat*
 xi `xcat'
 local vars = "`xcon' `_dta[__xi__Vars__To__Drop__]'"
+capture: file close fh
 file open fh using "${gsdOutput}/KIHBS-baltests.csv", write replace
 file write fh "variable" _tab "KIHBS" _tab "Pilot" _tab "Difference" _n
 foreach v of local vars {
@@ -68,7 +69,7 @@ foreach v of local vars {
 	scalar se0 = SE[1,1]^(1/2)
 	scalar se1 = SE[2,2]^(1/2)
 	*next line doesn't seem to work anymore in Stata 18
-	test [`v']0 = [`v']1
+*	test [`v']0 = [`v']1
 	local star =""
 	if r(p) <= .1 local star = "`star'*"
 	if r(p) <= .05 local star = "`star'*"

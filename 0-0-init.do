@@ -22,7 +22,7 @@ if ("${suser}"=="wb390290") {
 	} 
 	else {
 		*Local directory of your checked out copy of the code
-		local swdLocal = "C:\Users\WB390290\OneDrive - WBG\Home\Research\RCS\Analysis"
+		local swdLocal = "C:\Users\WB390290\OneDrive - WBG\Home\Research\Projects\RCS\Analysis"
 	}
 }
 else {

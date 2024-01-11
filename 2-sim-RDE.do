@@ -21,22 +21,26 @@ foreach sd of local ldata {
 }
 
 local lc_all = "0 5 10"
-local lm_all = "2 4 6 8 10"		
+local lm_all0 = "2 4 6 8 10"		
+local lm_all5 = "2 4 6 8 10 12 20 25 30 40 50"		
+local lm_all10 = "2 4 6 8 10"		
 local lc_ken = "0 1 3 5 10 20"
-local lm_len = "2 4 6 8 10 12 15 20 25 30 40 50"		
+local lm_ken = "2 4 6 8 10 12 20 25 30 40 50"		
 foreach sd of local ldata {
 	*do more detailed run for Kenya
 	if sd=="KEN-KIHBS" {
 		local lc = lc_ken
-		local lm = lm_ken		
 	}
 	else {
 		local lc = lc_all
-		local lm = lm_all		
 	}
 	foreach kc of local lc {
-		*local sd = ""
-		*local kc = 0
+		if sd=="KEN-KIHBS" {
+			local lm = lm_ken		
+		}
+		else {
+			local lm = lm_all`kc'
+		}
 		foreach km of local lm {
 			di "Running for `sd': kc=`kc'; km=`km'"
 			local train = inlist("`sd'","KEN-KIHBS","NGA-GHS")
@@ -77,7 +81,7 @@ clear
 foreach sd of local ldata {
 	local train = inlist("`sd'","KEN-KIHBS","NGA-GHS")
 	foreach kc of local lc_all {
-		foreach km of local lm_all {
+		foreach km of local lm`kc' {
 			local dirbase = "${gsdOutput}/`sd'-c`kc'-m`km'-t`train'"
 			cap: append using "`dirbase'.dta"
 			if _rc==601 di "File `dirbase'.dta does not exist."
