@@ -8,7 +8,7 @@ if "${gsdDo}"=="" {
 capture confirm file "${gsdOutput}/RDE-results_all.dta"
 if _rc != 0 {
 	*prepare datasets
-	foreach sd of local ldata {
+	foreach sd of global gdata {
 		di "Preparing dataset for `sd'..."
 		run "${gsdDo}/1-prep-`sd'.do"
 	}

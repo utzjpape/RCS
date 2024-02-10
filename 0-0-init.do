@@ -41,7 +41,7 @@ foreach p of local lp {
 }
 
 *datasets to use
-local ldata = "KEN-KIHBS NGA-GHS SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009"
+global gdata = "KEN-KIHBS NGA-GHS SDN-NBHS2009 SLD-SLHS2013 SSD-NBHS2009"
 
 *prepare directories
 global gsdData = "`swdLocal'/Data"

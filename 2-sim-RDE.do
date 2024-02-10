@@ -6,7 +6,7 @@ if "${gsdDo}"=="" {
 }
 
 *test run
-foreach sd of local ldata {
+foreach sd of global gdata {
 	di "Test run for `sd'..."
 	*indicate existence of training dataset 
 	local train = inlist("`sd'","KEN-KIHBS","NGA-GHS")
@@ -26,20 +26,20 @@ local lm_all5 = "2 4 6 8 10 12 20 25 30 40 50"
 local lm_all10 = "2 4 6 8 10"		
 local lc_ken = "0 1 3 5 10 20"
 local lm_ken = "2 4 6 8 10 12 20 25 30 40 50"		
-foreach sd of local ldata {
+foreach sd of global gdata {
 	*do more detailed run for Kenya
-	if sd=="KEN-KIHBS" {
-		local lc = lc_ken
+	if "`sd'"=="KEN-KIHBS" {
+		local lc = "`lc_ken'"
 	}
 	else {
-		local lc = lc_all
+		local lc = "`lc_all'"
 	}
 	foreach kc of local lc {
-		if sd=="KEN-KIHBS" {
-			local lm = lm_ken		
+		if "`sd'"=="KEN-KIHBS" {
+			local lm = "`lm_ken'"		
 		}
 		else {
-			local lm = lm_all`kc'
+			local lm = "`lm_all`kc''"
 		}
 		foreach km of local lm {
 			di "Running for `sd': kc=`kc'; km=`km'"
@@ -77,22 +77,34 @@ foreach sd of local ldata {
 				.r.cleanup
 			}
 		}
-		
 	}
 }
 
 *generate output for all countries
 clear
-foreach sd of local ldata {
+foreach sd of global gdata {
 	local train = inlist("`sd'","KEN-KIHBS","NGA-GHS")
-	foreach kc of local lc_all {
-		foreach km of local lm`kc' {
+	*do more detailed run for Kenya
+	if "`sd'"=="KEN-KIHBS" {
+		local lc = "`lc_ken'"
+	}
+	else {
+		local lc = "`lc_all'"
+	}
+	foreach kc of local lc {
+		if "`sd'"=="KEN-KIHBS" {
+			local lm = "`lm_ken'"		
+		}
+		else {
+			local lm = "`lm_all`kc''"
+		}
+		foreach km of local lm {
 			local dirbase = "${gsdOutput}/`sd'-c`kc'-m`km'-t`train'"
 			cap: append using "`dirbase'.dta"
 			if _rc==601 di "File `dirbase'.dta does not exist."
 			quietly: desc
 			if r(k)==33 gen sd=""
-			quietly: replace sd = "`sd'" if sd == ""
+			quietly: replace sd = "`sd'" if sd == ""		
 		}
 	}
 }
