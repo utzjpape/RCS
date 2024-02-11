@@ -403,7 +403,7 @@ program define .est_mi_reg
 					if r(N)>5 {
 						capture: mi impute monotone (logit, augment) y_0 (reg, cond(if y_0==0)) y = `.`log'model' if imod==`imod' & food==`food', `add'
 						local r= _rc
-						if inlist(`r',111,430,2000,3301,3621) {
+						if inlist(`r',111,430,498,2000,3301,3621) {
 							mi impute monotone (logit y_0 `.minmodel', augment) (reg y `.`log'model', cond(if y_0==0)) if imod==`imod' & food==`food', custom `add'
 						}
 						else if `r'>0 {
