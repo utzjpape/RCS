@@ -22,10 +22,10 @@ foreach sd of global gdata {
 
 local lc_all = "0 5 10"
 local lm_all0 = "2 4 6 8 10"		
-local lm_all5 = "2 4 6 8 10 12 20 25 30 40 50"		
+local lm_all5 = "2 4 6 8 10 12 15 20"		
 local lm_all10 = "2 4 6 8 10"		
 local lc_ken = "0 1 3 5 10 20"
-local lm_ken = "2 4 6 8 10 12 20 25 30 40 50"		
+local lm_ken = "2 4 6 8 10 12 15 20"
 foreach sd of global gdata {
 	*do more detailed run for Kenya
 	if "`sd'"=="KEN-KIHBS" {

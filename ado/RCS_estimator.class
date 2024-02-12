@@ -404,16 +404,34 @@ program define .est_mi_reg
 						capture: mi impute monotone (logit, augment) y_0 (reg, cond(if y_0==0)) y = `.`log'model' if imod==`imod' & food==`food', `add'
 						local r= _rc
 						if inlist(`r',111,430,498,2000,3301,3621) {
-							mi impute monotone (logit y_0 `.minmodel', augment) (reg y `.`log'model', cond(if y_0==0)) if imod==`imod' & food==`food', custom `add'
+							capture: mi impute monotone (logit y_0 `.minmodel', augment) (reg y `.`log'model', cond(if y_0==0)) if imod==`imod' & food==`food', custom `add'
+							local r= _rc
+							if inlist(`r',111,430,498,2000,3301,3621) {
+								mi impute monotone (logit y_0 `.minmodel', augment) (reg y `.minmodel', cond(if y_0==0)) if imod==`imod' & food==`food', custom `add'
+							}
+							else if `r'>0 {
+								di as error "Error (`r') in mi_2cel estimation (2nd level) with imod=`imod' and food=`food':"
+								noisily: tab y_0 if ((imod==`imod') & (food==`food'))
+								error `r'
+							}
 						}
 						else if `r'>0 {
-							di as error "Error (`r') in mi_2cel estimation with imod=`imod' and food=`food':"
+							di as error "Error (`r') in mi_2cel estimation (1st level) with imod=`imod' and food=`food':"
 							noisily: tab y_0 if ((imod==`imod') & (food==`food'))
 							error `r'
 						}
 					}
 					else {
-						mi impute reg y = `.`log'model' if imod==`imod' & food==`food', `add'
+						capture: mi impute reg y = `.`log'model' if imod==`imod' & food==`food', `add'
+						local r= _rc
+						if inlist(`r',111,430,498,2000,3301,3621) {
+							mi impute reg y = `.minmodel' if imod==`imod' & food==`food', `add'
+						}
+						else if `r'>0 {
+							di as error "Error (`r') in mi_2cel estimation (n<5) with imod=`imod' and food=`food':"
+							noisily: tab y_0 if ((imod==`imod') & (food==`food'))
+							error `r'
+						}
 					}
 					local add = "replace"
 				}
